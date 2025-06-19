@@ -5,6 +5,51 @@ All notable changes to the Flutter Redirectly plugin will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2025-01-15
+
+### 🚀 NEW: Complete Link Management & Resolution API
+
+Added comprehensive link management functionality that was missing from the initial pure Dart release.
+
+#### ✅ New Backend Endpoints
+
+- **Link Resolution**: `GET /api/v1/resolve/{username}/{slug}` - Resolve any link without redirecting
+- **Individual Link Access**: `GET /api/v1/links/{slug}` - Get specific permanent link details
+- **Temporary Link Access**: `GET /api/v1/temp-links/{slug}` - Get specific temporary link details
+- **Link Management**: `PUT/DELETE /api/v1/links/{slug}` - Update/delete permanent links
+- **Temp Link Management**: `DELETE /api/v1/temp-links/{slug}` - Delete temporary links
+
+#### ✅ New Flutter SDK Methods
+
+- **`getLinks()`** - Fetch all user's permanent links
+- **`getLink(slug)`** - Get specific permanent link by slug
+- **`getTempLink(slug)`** - Get specific temporary link by slug
+- **`resolveLink(username, slug)`** - Resolve any link by username/slug (public)
+- **`updateLink(slug, target, metadata)`** - Update permanent link
+- **`deleteLink(slug)`** - Delete permanent link
+- **`deleteTempLink(slug)`** - Delete temporary link
+
+#### ✅ Enhanced Models
+
+- **`RedirectlyLinkResolution`** - Universal model for resolved links (permanent or temporary)
+- **Enhanced `RedirectlyLinkClick`** - Now includes resolved link details with `linkResolution` field
+- **Smart Link Processing** - Automatically resolves link details when clicked
+
+#### ✅ Improved Example App
+
+- **Link Resolution Demo** - Test resolving links by username/slug
+- **Enhanced Link Clicks** - Shows resolved link details (target, type, clicks, expiration)
+- **Complete CRUD Operations** - Create, read, update, delete links
+- **Better UI** - More informative displays with link details
+
+#### 📈 Benefits
+
+- **Complete API Coverage** - Now supports all backend link operations
+- **Enhanced Link Clicks** - Get full link details when links are clicked
+- **Better User Experience** - Rich link information in your app
+- **Full CRUD Support** - Manage links programmatically
+- **Public Resolution** - Resolve any user's links without authentication
+
 ## [2.0.0] - 2025-01-15
 
 ### 🎉 MAJOR: Pure Dart Implementation - No Native Code Required

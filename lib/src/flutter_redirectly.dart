@@ -142,13 +142,27 @@ class FlutterRedirectly {
       print('Processing Redirectly link: username=$username, slug=$slug');
     }
 
-    // Return link click with parsed info
-    // Note: We don't fetch link details since your backend redirects directly
-    // The app can use the username/slug info for navigation
+    // Try to resolve link details from backend
+    RedirectlyLinkResolution? linkResolution;
+    try {
+      linkResolution = await resolveLink(username, slug);
+
+      if (_config!.enableDebugLogging) {
+        print(
+            'Link resolved: ${linkResolution.type} link targeting ${linkResolution.target}');
+      }
+    } catch (e) {
+      if (_config!.enableDebugLogging) {
+        print('Failed to resolve link details: $e');
+      }
+      // Continue without link details - not a fatal error
+    }
+
     return RedirectlyLinkClick(
       originalUrl: originalUrl,
       slug: slug,
       username: username,
+      linkResolution: linkResolution,
       receivedAt: DateTime.now(),
     );
   }
@@ -254,6 +268,216 @@ class FlutterRedirectly {
         throw RedirectlyError.apiError(
           message:
               error['error'] as String? ?? 'Failed to create temporary link',
+          statusCode: response.statusCode,
+          details: error,
+        );
+      }
+    } catch (e) {
+      if (e is RedirectlyError) rethrow;
+      throw RedirectlyError.networkError('Network error: $e');
+    }
+  }
+
+  /// Get all permanent links
+  Future<List<RedirectlyLink>> getLinks() async {
+    _ensureInitialized();
+
+    try {
+      final response = await _httpClient.get(
+        Uri.parse('${_config!.effectiveBaseUrl}/api/v1/links'),
+        headers: {
+          'Authorization': 'Bearer ${_config!.apiKey}',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final jsonList = jsonDecode(response.body) as List<dynamic>;
+        return jsonList
+            .cast<Map<String, dynamic>>()
+            .map((json) => RedirectlyLink.fromJson(json))
+            .toList();
+      } else {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        throw RedirectlyError.apiError(
+          message: error['error'] as String? ?? 'Failed to fetch links',
+          statusCode: response.statusCode,
+          details: error,
+        );
+      }
+    } catch (e) {
+      if (e is RedirectlyError) rethrow;
+      throw RedirectlyError.networkError('Network error: $e');
+    }
+  }
+
+  /// Get a specific permanent link by slug
+  Future<RedirectlyLink> getLink(String slug) async {
+    _ensureInitialized();
+
+    try {
+      final response = await _httpClient.get(
+        Uri.parse('${_config!.effectiveBaseUrl}/api/v1/links/$slug'),
+        headers: {
+          'Authorization': 'Bearer ${_config!.apiKey}',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return RedirectlyLink.fromJson(json);
+      } else {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        throw RedirectlyError.apiError(
+          message: error['error'] as String? ?? 'Failed to fetch link',
+          statusCode: response.statusCode,
+          details: error,
+        );
+      }
+    } catch (e) {
+      if (e is RedirectlyError) rethrow;
+      throw RedirectlyError.networkError('Network error: $e');
+    }
+  }
+
+  /// Get a specific temporary link by slug
+  Future<RedirectlyTempLink> getTempLink(String slug) async {
+    _ensureInitialized();
+
+    try {
+      final response = await _httpClient.get(
+        Uri.parse('${_config!.effectiveBaseUrl}/api/v1/temp-links/$slug'),
+        headers: {
+          'Authorization': 'Bearer ${_config!.apiKey}',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return RedirectlyTempLink.fromJson(json);
+      } else {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        throw RedirectlyError.apiError(
+          message:
+              error['error'] as String? ?? 'Failed to fetch temporary link',
+          statusCode: response.statusCode,
+          details: error,
+        );
+      }
+    } catch (e) {
+      if (e is RedirectlyError) rethrow;
+      throw RedirectlyError.networkError('Network error: $e');
+    }
+  }
+
+  /// Resolve a link by username and slug (public endpoint)
+  Future<RedirectlyLinkResolution> resolveLink(
+      String username, String slug) async {
+    _ensureInitialized();
+
+    try {
+      final response = await _httpClient.get(
+        Uri.parse(
+            '${_config!.effectiveBaseUrl}/api/v1/resolve/$username/$slug'),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return RedirectlyLinkResolution.fromJson(json);
+      } else {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        throw RedirectlyError.apiError(
+          message: error['error'] as String? ?? 'Failed to resolve link',
+          statusCode: response.statusCode,
+          details: error,
+        );
+      }
+    } catch (e) {
+      if (e is RedirectlyError) rethrow;
+      throw RedirectlyError.networkError('Network error: $e');
+    }
+  }
+
+  /// Update a permanent link
+  Future<RedirectlyLink> updateLink(
+    String slug, {
+    required String target,
+    Map<String, dynamic>? metadata,
+  }) async {
+    _ensureInitialized();
+
+    try {
+      final response = await _httpClient.put(
+        Uri.parse('${_config!.effectiveBaseUrl}/api/v1/links/$slug'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${_config!.apiKey}',
+        },
+        body: jsonEncode({
+          'target': target,
+          if (metadata != null) 'metadata': metadata,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return RedirectlyLink.fromJson(json);
+      } else {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        throw RedirectlyError.apiError(
+          message: error['error'] as String? ?? 'Failed to update link',
+          statusCode: response.statusCode,
+          details: error,
+        );
+      }
+    } catch (e) {
+      if (e is RedirectlyError) rethrow;
+      throw RedirectlyError.networkError('Network error: $e');
+    }
+  }
+
+  /// Delete a permanent link
+  Future<void> deleteLink(String slug) async {
+    _ensureInitialized();
+
+    try {
+      final response = await _httpClient.delete(
+        Uri.parse('${_config!.effectiveBaseUrl}/api/v1/links/$slug'),
+        headers: {
+          'Authorization': 'Bearer ${_config!.apiKey}',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        throw RedirectlyError.apiError(
+          message: error['error'] as String? ?? 'Failed to delete link',
+          statusCode: response.statusCode,
+          details: error,
+        );
+      }
+    } catch (e) {
+      if (e is RedirectlyError) rethrow;
+      throw RedirectlyError.networkError('Network error: $e');
+    }
+  }
+
+  /// Delete a temporary link
+  Future<void> deleteTempLink(String slug) async {
+    _ensureInitialized();
+
+    try {
+      final response = await _httpClient.delete(
+        Uri.parse('${_config!.effectiveBaseUrl}/api/v1/temp-links/$slug'),
+        headers: {
+          'Authorization': 'Bearer ${_config!.apiKey}',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        throw RedirectlyError.apiError(
+          message:
+              error['error'] as String? ?? 'Failed to delete temporary link',
           statusCode: response.statusCode,
           details: error,
         );

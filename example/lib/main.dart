@@ -34,6 +34,8 @@ class _MyHomePageState extends State<MyHomePage> {
   final _redirectly = FlutterRedirectly();
   final _slugController = TextEditingController();
   final _targetController = TextEditingController();
+  final _usernameController = TextEditingController();
+  final _resolveSlugController = TextEditingController();
 
   String _status = 'Not initialized';
   List<RedirectlyLink> _links = [];
@@ -101,9 +103,14 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<void> _loadLinks() async {
     if (!_initialized) return;
 
-    // Note: In pure Dart mode, we focus on link creation and clicking.
-    // You could add a getLinks() method to the plugin if needed.
-    // For now, we'll just track created links locally.
+    try {
+      final links = await _redirectly.getLinks();
+      setState(() {
+        _links = links;
+      });
+    } catch (e) {
+      _showErrorDialog('Load Links Error', e.toString());
+    }
   }
 
   Future<void> _createLink() async {
@@ -160,6 +167,25 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  Future<void> _resolveLink() async {
+    if (!_initialized ||
+        _usernameController.text.isEmpty ||
+        _resolveSlugController.text.isEmpty) {
+      return;
+    }
+
+    try {
+      final resolution = await _redirectly.resolveLink(
+        _usernameController.text,
+        _resolveSlugController.text,
+      );
+
+      _showLinkResolutionDialog(resolution);
+    } catch (e) {
+      _showErrorDialog('Resolve Link Error', e.toString());
+    }
+  }
+
   void _showLinkClickDialog(RedirectlyLinkClick linkClick) {
     showDialog(
       context: context,
@@ -174,6 +200,23 @@ class _MyHomePageState extends State<MyHomePage> {
               _buildInfoRow('Username', linkClick.username),
               _buildInfoRow('Slug', linkClick.slug),
               _buildInfoRow('Received At', linkClick.receivedAt.toString()),
+              if (linkClick.isResolved) ...[
+                const SizedBox(height: 16),
+                const Text(
+                  '🔗 Link Details',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                _buildInfoRow('Type', linkClick.linkType ?? 'Unknown'),
+                _buildInfoRow('Target', linkClick.targetUrl ?? 'Unknown'),
+                if (linkClick.linkResolution?.isPermanent == true)
+                  _buildInfoRow(
+                      'Clicks', '${linkClick.linkResolution?.clickCount ?? 0}'),
+                if (linkClick.linkResolution?.isTemporary == true &&
+                    linkClick.linkResolution?.timeUntilExpiration != null)
+                  _buildInfoRow('Expires In',
+                      '${linkClick.linkResolution!.timeUntilExpiration!.inMinutes} minutes'),
+              ],
               const SizedBox(height: 16),
               const Text(
                 'Pure Dart Implementation ✨',
@@ -220,6 +263,45 @@ class _MyHomePageState extends State<MyHomePage> {
                 'TTL: ${tempLink.ttlSeconds} seconds',
                 style: const TextStyle(fontSize: 12),
               ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLinkResolutionDialog(RedirectlyLinkResolution resolution) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Link Resolution - ${resolution.type.toUpperCase()}'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildInfoRow('Slug', resolution.slug),
+              _buildInfoRow('Target', resolution.target),
+              _buildInfoRow('URL', resolution.url),
+              _buildInfoRow('Type', resolution.type),
+              _buildInfoRow('Created', resolution.createdAt.toString()),
+              if (resolution.isPermanent) ...[
+                _buildInfoRow('Clicks', '${resolution.clickCount ?? 0}'),
+                if (resolution.metadata != null)
+                  _buildInfoRow('Metadata', resolution.metadata.toString()),
+              ],
+              if (resolution.isTemporary) ...[
+                _buildInfoRow('Expires At', resolution.expiresAt.toString()),
+                if (resolution.timeUntilExpiration != null)
+                  _buildInfoRow('Time Left',
+                      '${resolution.timeUntilExpiration!.inMinutes} minutes'),
+              ],
             ],
           ),
         ),
@@ -372,6 +454,49 @@ class _MyHomePageState extends State<MyHomePage> {
 
               const SizedBox(height: 16),
 
+              // Link Resolution Form
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Resolve Link',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _usernameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Username',
+                          hintText: 'john',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _resolveSlugController,
+                        decoration: const InputDecoration(
+                          labelText: 'Slug',
+                          hintText: 'my-link',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: _resolveLink,
+                        icon: const Icon(Icons.search),
+                        label: const Text('Resolve Link'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
               // Links List
               Card(
                 child: Padding(
@@ -400,12 +525,22 @@ class _MyHomePageState extends State<MyHomePage> {
                         ...(_links.map((link) => ListTile(
                               title: Text(link.slug),
                               subtitle: Text(link.target),
-                              trailing: Text(
-                                link.url,
-                                style: const TextStyle(
-                                  fontFamily: 'monospace',
-                                  fontSize: 12,
-                                ),
+                              trailing: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '${link.clickCount} clicks',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  Text(
+                                    link.url,
+                                    style: const TextStyle(
+                                      fontFamily: 'monospace',
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ))),
                     ],
@@ -433,16 +568,35 @@ class _MyHomePageState extends State<MyHomePage> {
                       else
                         ...(_linkClicks.take(5).map((click) => ListTile(
                               title: Text('${click.username}/${click.slug}'),
-                              subtitle: Text(click.originalUrl),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(click.originalUrl),
+                                  if (click.isResolved)
+                                    Text(
+                                      '→ ${click.targetUrl} (${click.linkType})',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.green,
+                                      ),
+                                    ),
+                                ],
+                              ),
                               trailing: Text(
                                 click.receivedAt.toString().substring(11, 19),
                                 style: const TextStyle(fontSize: 12),
                               ),
                               leading: Icon(
-                                click.error != null ? Icons.error : Icons.link,
+                                click.error != null
+                                    ? Icons.error
+                                    : click.isResolved
+                                        ? Icons.link_rounded
+                                        : Icons.link,
                                 color: click.error != null
                                     ? Colors.red
-                                    : Colors.green,
+                                    : click.isResolved
+                                        ? Colors.green
+                                        : Colors.orange,
                               ),
                             ))),
                     ],
@@ -460,6 +614,8 @@ class _MyHomePageState extends State<MyHomePage> {
   void dispose() {
     _slugController.dispose();
     _targetController.dispose();
+    _usernameController.dispose();
+    _resolveSlugController.dispose();
     _redirectly.dispose();
     super.dispose();
   }

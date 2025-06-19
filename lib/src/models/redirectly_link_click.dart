@@ -1,4 +1,5 @@
 import 'redirectly_error.dart';
+import 'redirectly_link_resolution.dart';
 
 /// Represents a click on a Redirectly link
 class RedirectlyLinkClick {
@@ -17,17 +18,30 @@ class RedirectlyLinkClick {
   /// Error that occurred while processing the link (if any)
   final RedirectlyError? error;
 
+  /// Resolved link details (if resolution was successful)
+  final RedirectlyLinkResolution? linkResolution;
+
   const RedirectlyLinkClick({
     required this.originalUrl,
     required this.slug,
     required this.username,
     required this.receivedAt,
     this.error,
+    this.linkResolution,
   });
+
+  /// Whether link resolution was successful
+  bool get isResolved => linkResolution != null && error == null;
+
+  /// Get the target URL if resolution was successful
+  String? get targetUrl => linkResolution?.target;
+
+  /// Get the link type if resolution was successful
+  String? get linkType => linkResolution?.type;
 
   @override
   String toString() {
-    return 'RedirectlyLinkClick(originalUrl: $originalUrl, slug: $slug, username: $username, receivedAt: $receivedAt, error: $error)';
+    return 'RedirectlyLinkClick(originalUrl: $originalUrl, slug: $slug, username: $username, resolved: $isResolved, receivedAt: $receivedAt, error: $error)';
   }
 
   @override
@@ -38,7 +52,8 @@ class RedirectlyLinkClick {
         other.slug == slug &&
         other.username == username &&
         other.receivedAt == receivedAt &&
-        other.error == error;
+        other.error == error &&
+        other.linkResolution == linkResolution;
   }
 
   @override
@@ -47,6 +62,7 @@ class RedirectlyLinkClick {
         slug.hashCode ^
         username.hashCode ^
         receivedAt.hashCode ^
-        error.hashCode;
+        error.hashCode ^
+        linkResolution.hashCode;
   }
 }
