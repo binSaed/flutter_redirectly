@@ -278,38 +278,6 @@ class FlutterRedirectly {
     }
   }
 
-  /// Get all permanent links
-  Future<List<RedirectlyLink>> getLinks() async {
-    _ensureInitialized();
-
-    try {
-      final response = await _httpClient.get(
-        Uri.parse('${_config!.effectiveBaseUrl}/api/v1/links'),
-        headers: {
-          'Authorization': 'Bearer ${_config!.apiKey}',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final jsonList = jsonDecode(response.body) as List<dynamic>;
-        return jsonList
-            .cast<Map<String, dynamic>>()
-            .map((json) => RedirectlyLink.fromJson(json))
-            .toList();
-      } else {
-        final error = jsonDecode(response.body) as Map<String, dynamic>;
-        throw RedirectlyError.apiError(
-          message: error['error'] as String? ?? 'Failed to fetch links',
-          statusCode: response.statusCode,
-          details: error,
-        );
-      }
-    } catch (e) {
-      if (e is RedirectlyError) rethrow;
-      throw RedirectlyError.networkError('Network error: $e');
-    }
-  }
-
   /// Stream of incoming link clicks
   Stream<RedirectlyLinkClick> get onLinkClick => _linkClickController.stream;
 

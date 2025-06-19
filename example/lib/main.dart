@@ -36,7 +36,6 @@ class _MyHomePageState extends State<MyHomePage> {
   final TextEditingController _targetController = TextEditingController();
   final TextEditingController _apiKeyController = TextEditingController();
 
-  List<RedirectlyLink> _links = [];
   List<RedirectlyLinkClick> _linkClicks = [];
   bool _isInitialized = false;
   bool _isLoading = false;
@@ -95,35 +94,9 @@ class _MyHomePageState extends State<MyHomePage> {
       setState(() {
         _isInitialized = true;
       });
-
-      await _fetchLinks();
     } catch (e) {
       setState(() {
         _errorMessage = 'Failed to initialize: $e';
-      });
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _fetchLinks() async {
-    if (!_isInitialized) return;
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final links = await _redirectly.getLinks();
-      setState(() {
-        _links = links;
-      });
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Failed to fetch links: $e';
       });
     } finally {
       setState(() {
@@ -156,8 +129,6 @@ class _MyHomePageState extends State<MyHomePage> {
 
       _slugController.clear();
       _targetController.clear();
-
-      await _fetchLinks();
     } catch (e) {
       setState(() {
         _errorMessage = 'Failed to create link: $e';
@@ -344,46 +315,6 @@ class _MyHomePageState extends State<MyHomePage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
-
-              // Links List
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Your Links',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  IconButton(
-                    onPressed: _isLoading ? null : _fetchLinks,
-                    icon: const Icon(Icons.refresh),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (_links.isEmpty)
-                const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Text('No links created yet.'),
-                  ),
-                )
-              else
-                ...(_links.map((link) => Card(
-                      child: ListTile(
-                        title: Text(link.slug),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Target: ${link.target}'),
-                            Text('Clicks: ${link.clickCount}'),
-                            Text('URL: ${link.url}'),
-                          ],
-                        ),
-                        isThreeLine: true,
-                      ),
-                    ))),
-
               const SizedBox(height: 24),
 
               // Link Clicks

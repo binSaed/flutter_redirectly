@@ -2,6 +2,8 @@
 
 A Flutter plugin that provides Firebase Dynamic Links-like functionality using your own Redirectly backend. This plugin allows you to create, manage, and handle dynamic links in your Flutter app.
 
+More detailed information [redirectly.app](https://redirectly.app?src=readmy)
+
 ## Features
 
 - 🔗 **Create permanent and temporary links** via API
@@ -53,7 +55,7 @@ Add the following to your `android/app/src/main/AndroidManifest.xml`:
         <action android:name="android.intent.action.VIEW" />
         <category android:name="android.intent.category.DEFAULT" />
         <category android:name="android.intent.category.BROWSABLE" />
-        <data android:scheme="https" android:host="*.redirectly.app" />
+        <data android:scheme="https" android:host="YOUR_SUBDOMAIN.redirectly.app" />
     </intent-filter>
 </activity>
 ```
@@ -76,7 +78,7 @@ Add the following to your `ios/Runner/Info.plist`:
         <array>
             <dict>
                 <key>CFBundleURLName</key>
-                <string>redirectly.app</string>
+                <string>YOUR_SUBDOMAIN.redirectly.app</string>
                 <key>CFBundleURLSchemes</key>
                 <array>
                     <string>https</string>
@@ -148,16 +150,6 @@ final tempLink = await redirectly.createTempLink(
 
 print('Temp link: ${tempLink.url}');
 print('Expires at: ${tempLink.expiresAt}');
-```
-
-### Manage links
-
-```dart
-// Get all your permanent links
-final links = await redirectly.getLinks();
-for (final link in links) {
-  print('${link.slug} -> ${link.target} (${link.clickCount} clicks)');
-}
 ```
 
 ### Error handling
