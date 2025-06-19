@@ -11,7 +11,7 @@ A Flutter plugin that provides Firebase Dynamic Links-like functionality using y
 This plugin allows you to create, manage, and handle dynamic links in your Flutter app.
                        DESC
   s.homepage         = 'https://redirectly.app'
-  s.license          = { :file => '../LICENSE' }
+  s.license          = { :file => '../../LICENSE' }
   s.author           = { 'Flutter Redirectly' => 'contact@redirectly.app' }
 
   s.source           = { :path => '.' }

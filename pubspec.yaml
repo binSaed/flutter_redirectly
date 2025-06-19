@@ -29,3 +29,4 @@ flutter:
         pluginClass: FlutterRedirectlyPlugin
       ios:
         pluginClass: FlutterRedirectlyPlugin
+        podspecPath: ios/flutter_redirectly.podspec
