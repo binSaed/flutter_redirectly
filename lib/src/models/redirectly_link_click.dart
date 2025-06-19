@@ -1,78 +1,52 @@
 import 'redirectly_error.dart';
 
-/// Represents data received when a Redirectly link is clicked and opened in the app
+/// Represents a click on a Redirectly link
 class RedirectlyLinkClick {
-  /// The original clicked URL
+  /// The original URL that was clicked
   final String originalUrl;
 
-  /// The slug extracted from the URL
+  /// The slug from the URL
   final String slug;
 
-  /// The username extracted from the subdomain
+  /// The username from the URL
   final String username;
 
-  /// Full link details fetched from backend (null if fetch failed)
-  final RedirectlyLinkDetails? linkDetails;
-
-  /// Any error that occurred while processing the link
-  final RedirectlyError? error;
-
-  /// When the click was received by the app
+  /// When the link was received
   final DateTime receivedAt;
+
+  /// Error that occurred while processing the link (if any)
+  final RedirectlyError? error;
 
   const RedirectlyLinkClick({
     required this.originalUrl,
     required this.slug,
     required this.username,
-    this.linkDetails,
-    this.error,
     required this.receivedAt,
+    this.error,
   });
-
-  /// Whether link processing was successful
-  bool get isSuccessful => error == null && linkDetails != null;
 
   @override
   String toString() {
-    return 'RedirectlyLinkClick(url: $originalUrl, slug: $slug, user: $username, success: $isSuccessful)';
-  }
-}
-
-/// Detailed information about a clicked link fetched from the backend
-class RedirectlyLinkDetails {
-  /// Target URL that the link redirects to
-  final String target;
-
-  /// Link metadata from backend
-  final Map<String, dynamic>? metadata;
-
-  /// Whether this was a permanent or temporary link
-  final bool isPermanent;
-
-  /// Expiration date for temporary links
-  final DateTime? expiresAt;
-
-  const RedirectlyLinkDetails({
-    required this.target,
-    this.metadata,
-    required this.isPermanent,
-    this.expiresAt,
-  });
-
-  /// Create from backend API response
-  factory RedirectlyLinkDetails.fromJson(Map<String, dynamic> json) {
-    return RedirectlyLinkDetails(
-      target: json['target'] as String,
-      metadata: json['metadata'] as Map<String, dynamic>?,
-      isPermanent: json['is_permanent'] as bool? ?? true,
-      expiresAt: json['expires_at'] != null
-          ? DateTime.parse(json['expires_at'] as String)
-          : null,
-    );
+    return 'RedirectlyLinkClick(originalUrl: $originalUrl, slug: $slug, username: $username, receivedAt: $receivedAt, error: $error)';
   }
 
   @override
-  String toString() {
-    return 'RedirectlyLinkDetails(target: $target, permanent: $isPermanent)';
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is RedirectlyLinkClick &&
+        other.originalUrl == originalUrl &&
+        other.slug == slug &&
+        other.username == username &&
+        other.receivedAt == receivedAt &&
+        other.error == error;
+  }
+
+  @override
+  int get hashCode {
+    return originalUrl.hashCode ^
+        slug.hashCode ^
+        username.hashCode ^
+        receivedAt.hashCode ^
+        error.hashCode;
   }
 }

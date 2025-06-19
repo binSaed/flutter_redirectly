@@ -1,8 +1,19 @@
 # Flutter Redirectly
 
-A Flutter plugin that provides Firebase Dynamic Links-like functionality using your own Redirectly backend. This plugin allows you to create, manage, and handle dynamic links in your Flutter app.
+🎉 **Pure Dart Implementation - No Native Code Required!**
 
-More detailed information [redirectly.app](https://redirectly.app?src=readmy)
+A Flutter package that provides Firebase Dynamic Links-like functionality using your own Redirectly backend. This package allows you to create, manage, and handle dynamic links in your Flutter app - with **zero native code dependencies!**
+
+More detailed information: [redirectly.app](https://redirectly.app?src=flutter_plugin)
+
+## ✨ Why Pure Dart?
+
+- **🚀 Zero Native Code**: No Android Kotlin or iOS Swift required
+- **⚡ Faster Development**: Single codebase, faster builds, easier debugging
+- **🔧 Simpler Setup**: No platform-specific configuration needed
+- **📦 Smaller Bundle**: No native platform channels or implementations
+- **🧪 Better Testing**: Pure Dart code is easier to unit test
+- **🎯 Single Source of Truth**: All logic in one place
 
 ## Features
 
@@ -10,10 +21,10 @@ More detailed information [redirectly.app](https://redirectly.app?src=readmy)
 - 📱 **Handle deep links** in all app states (cold start, background, foreground)
 - 🚀 **Built on app_links** for reliable link handling
 - 🔧 **Simple configuration** with just an API key
-- 📊 **Full link details** when links are clicked
-- 🛡️ **Comprehensive error handling**
-- 🔄 **No caching** - always fresh data
+- 📊 **Real-time link click notifications** via streams
+- 🛡️ **Comprehensive error handling** with typed errors
 - 🌐 **Support for both Android and iOS**
+- ✨ **Pure Dart**: Uses `app_links` + `http` packages only
 
 ## Installation
 
@@ -21,7 +32,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  flutter_redirectly: ^1.0.0
+  flutter_redirectly: ^2.0.0
 ```
 
 ## Backend Setup
@@ -33,6 +44,8 @@ This plugin works with the Redirectly backend. Make sure you have:
 3. Your links follow the format: `https://username.redirectly.app/slug`
 
 ## Configuration
+
+Since this is a **pure Dart package**, you only need to configure deep links using the `app_links` package (which is already included as a dependency).
 
 ### Android
 
@@ -74,17 +87,6 @@ Add the following to your `ios/Runner/Info.plist`:
         <array>
             <string>https</string>
         </array>
-        <key>CFBundleURLTypes</key>
-        <array>
-            <dict>
-                <key>CFBundleURLName</key>
-                <string>YOUR_SUBDOMAIN.redirectly.app</string>
-                <key>CFBundleURLSchemes</key>
-                <array>
-                    <string>https</string>
-                </array>
-            </dict>
-        </array>
     </dict>
 </array>
 ```
@@ -100,7 +102,8 @@ final redirectly = FlutterRedirectly();
 
 await redirectly.initialize(RedirectlyConfig(
   apiKey: 'your-api-key-here',
-  enableDebugLogging: true, // Optional
+  baseUrl: 'https://your-domain.com', // Optional, defaults to redirectly.app
+  enableDebugLogging: true, // Optional, helpful for debugging
 ));
 ```
 
@@ -112,10 +115,11 @@ redirectly.onLinkClick.listen((linkClick) {
   print('Link clicked: ${linkClick.originalUrl}');
   print('Username: ${linkClick.username}');
   print('Slug: ${linkClick.slug}');
+  print('Received at: ${linkClick.receivedAt}');
   
-  if (linkClick.isSuccessful) {
-    // Handle successful link
-    print('Target: ${linkClick.linkDetails?.target}');
+  if (linkClick.error == null) {
+    // Handle successful link - use username/slug for navigation
+    Navigator.of(context).pushNamed('/${linkClick.username}/${linkClick.slug}');
   } else {
     // Handle error
     print('Error: ${linkClick.error}');
@@ -125,7 +129,7 @@ redirectly.onLinkClick.listen((linkClick) {
 // Check for initial link (when app is opened via link)
 final initialLink = await redirectly.getInitialLink();
 if (initialLink != null) {
-  // Handle initial link
+  // Handle initial link same way as above
 }
 ```
 
@@ -142,10 +146,11 @@ final permanentLink = await redirectly.createLink(
 print('Created link: ${permanentLink.url}');
 print('Clicks: ${permanentLink.clickCount}');
 
-// Create a temporary link (expires after 15 minutes)
+// Create a temporary link (expires after 1 hour)
 final tempLink = await redirectly.createTempLink(
   target: 'https://example.com/temp-content',
-  ttlSeconds: 900, // 15 minutes
+  slug: 'temp-link', // Optional
+  ttlSeconds: 3600, // 1 hour
 );
 
 print('Temp link: ${tempLink.url}');
@@ -199,76 +204,115 @@ RedirectlyConfig({
 Represents a permanent link.
 
 ```dart
-class RedirectlyLink {
-  final String slug;           // Link slug
-  final String target;         // Target URL
-  final String url;           // Full clickable URL
-  final int clickCount;       // Number of clicks
-  final DateTime createdAt;   // Creation timestamp
-  final DateTime? updatedAt;  // Last update timestamp
-  final Map<String, dynamic>? metadata; // Optional metadata
-}
+RedirectlyLink({
+  required String id,
+  required String slug,
+  required String target,
+  required String url,
+  required int clickCount,
+  required DateTime createdAt,
+  Map<String, dynamic>? metadata,
+})
 ```
 
 ### RedirectlyTempLink
 
-Represents a temporary link.
+Represents a temporary link with expiration.
 
 ```dart
-class RedirectlyTempLink {
-  final String slug;          // Link slug
-  final String target;        // Target URL
-  final String url;          // Full clickable URL
-  final DateTime expiresAt;  // Expiration timestamp
-  final DateTime createdAt;  // Creation timestamp
-  final int? ttlSeconds;     // TTL in seconds
-  
-  bool get isExpired;        // Check if expired
-  Duration get timeUntilExpiration; // Time until expiration
-}
+RedirectlyTempLink({
+  required String id,
+  required String slug,
+  required String target,
+  required String url,
+  required int ttlSeconds,
+  required DateTime expiresAt,
+  required DateTime createdAt,
+})
 ```
 
 ### RedirectlyLinkClick
 
-Represents a clicked link received by the app.
+Data received when a link is clicked.
 
 ```dart
-class RedirectlyLinkClick {
-  final String originalUrl;           // Original clicked URL
-  final String slug;                  // Extracted slug
-  final String username;              // Extracted username
-  final RedirectlyLinkDetails? linkDetails; // Link details (if available)
-  final RedirectlyError? error;       // Error (if any)
-  final DateTime receivedAt;          // When received
-  
-  bool get isSuccessful;              // Whether processing was successful
-}
+RedirectlyLinkClick({
+  required String originalUrl,
+  required String slug,
+  required String username,
+  required DateTime receivedAt,
+  RedirectlyError? error,
+})
 ```
+
+### RedirectlyError
+
+Comprehensive error handling.
+
+```dart
+RedirectlyError({
+  required RedirectlyErrorType type,
+  required String message,
+  int? statusCode,
+  Map<String, dynamic>? details,
+})
+```
+
+Error types:
+
+- `RedirectlyErrorType.api` - API errors (4xx, 5xx responses)
+- `RedirectlyErrorType.network` - Network connectivity issues
+- `RedirectlyErrorType.configuration` - Setup/initialization errors
+- `RedirectlyErrorType.linkResolution` - Link parsing/processing errors
+
+## Architecture
+
+This package uses a **pure Dart architecture** with no native code:
+
+```
+┌─────────────────────────────────────┐
+│           Flutter App               │
+├─────────────────────────────────────┤
+│        flutter_redirectly           │
+│         (Pure Dart)                 │
+├─────────────────────────────────────┤
+│   app_links    │      http          │
+│  (Deep Links)  │   (API Calls)      │
+├─────────────────────────────────────┤
+│        Platform (Android/iOS)       │
+└─────────────────────────────────────┘
+```
+
+## Migration from v1.x
+
+If you're upgrading from v1.x, here are the key changes:
+
+### Breaking Changes
+
+- `RedirectlyLinkDetails` model removed
+- `RedirectlyLinkClick.linkDetails` field removed
+- No more platform-specific configuration needed
+
+### Benefits
+
+- **Faster builds** - No native compilation
+- **Simpler debugging** - All code in Dart
+- **Smaller bundle size** - No native libraries
+- **Easier testing** - Pure Dart unit tests
+
+### Migration Steps
+
+1. Update to `flutter_redirectly: ^2.0.0`
+2. Remove any platform-specific configurations (they're handled by `app_links`)
+3. Update link click handling to use `username` and `slug` instead of `linkDetails`
 
 ## Example
 
-Check out the [example app](example/) for a complete implementation showing:
-
-- Plugin initialization
-- Creating permanent and temporary links
-- Handling incoming link clicks
-- Error handling
-- UI for managing links
-
-## Platform Support
-
-| Platform | Support |
-|----------|---------|
-| Android  | ✅       |
-| iOS      | ✅       |
-| Web      | ❌       |
-| macOS    | ❌       |
-| Windows  | ❌       |
-| Linux    | ❌       |
+Check out the [example app](./example) for a complete implementation showing all features.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ## License
 
@@ -276,8 +320,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-If you encounter any issues or have questions, please file an issue on the [GitHub repository](https://github.com/yourname/flutter_redirectly).
+- 📧 **Email**: <support@redirectly.app>
+- 🐛 **Issues**: [GitHub Issues](https://github.com/redirectly-app/flutter_redirectly/issues)
+- 📚 **Documentation**: [redirectly.app/docs](https://redirectly.app/docs)
+- 💬 **Community**: [Discord](https://discord.gg/redirectly)
 
-## Changelog
+---
 
-See [CHANGELOG.md](CHANGELOG.md) for a list of changes.
+Made with ❤️ by the Redirectly team

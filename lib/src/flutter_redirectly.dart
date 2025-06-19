@@ -5,12 +5,11 @@ import 'package:app_links/app_links.dart';
 import 'package:http/http.dart' as http;
 
 import 'models/models.dart';
-import 'platform/flutter_redirectly_platform_interface.dart';
 
-/// Main Flutter Redirectly plugin class
+/// Pure Dart Flutter Redirectly plugin
 ///
 /// This class provides functionality similar to Firebase Dynamic Links
-/// but uses your own Redirectly backend.
+/// but uses your own Redirectly backend. No native code required!
 class FlutterRedirectly {
   static final FlutterRedirectly _instance = FlutterRedirectly._internal();
 
@@ -45,16 +44,14 @@ class FlutterRedirectly {
     _config = config;
 
     try {
-      // Initialize platform-specific implementation
-      await FlutterRedirectlyPlatform.instance.initialize(config);
-
       // Set up app links listening
       await _setupAppLinks();
 
       _initialized = true;
 
       if (config.enableDebugLogging) {
-        print('FlutterRedirectly initialized successfully');
+        print(
+            'FlutterRedirectly initialized successfully (Pure Dart - no native code!)');
       }
     } catch (e) {
       throw RedirectlyError.configError('Failed to initialize: $e');
@@ -122,81 +119,70 @@ class FlutterRedirectly {
     }
   }
 
-  /// Process a Redirectly link and fetch details from backend
+  /// Process a Redirectly link using pure Dart URL parsing
   Future<RedirectlyLinkClick> _processRedirectlyLink(Uri uri) async {
     final originalUrl = uri.toString();
 
-    // Extract username and slug from URL
-    // Format: https://username.redirectly.app/slug
+    // Parse username and slug using pure Dart
+    final parseResult = _parseRedirectlyUrl(uri);
+    if (parseResult == null) {
+      return RedirectlyLinkClick(
+        originalUrl: originalUrl,
+        slug: 'unknown',
+        username: 'unknown',
+        error: RedirectlyError.linkError('Invalid Redirectly URL format'),
+        receivedAt: DateTime.now(),
+      );
+    }
+
+    final username = parseResult['username']!;
+    final slug = parseResult['slug']!;
+
+    if (_config!.enableDebugLogging) {
+      print('Processing Redirectly link: username=$username, slug=$slug');
+    }
+
+    // Return link click with parsed info
+    // Note: We don't fetch link details since your backend redirects directly
+    // The app can use the username/slug info for navigation
+    return RedirectlyLinkClick(
+      originalUrl: originalUrl,
+      slug: slug,
+      username: username,
+      receivedAt: DateTime.now(),
+    );
+  }
+
+  /// Parse Redirectly URL using pure Dart
+  Map<String, String>? _parseRedirectlyUrl(Uri uri) {
     final host = uri.host;
     final pathSegments = uri.pathSegments;
-
-    String username;
-    String slug;
 
     if (host.contains('redirectly.app')) {
       // Production URL: username.redirectly.app/slug
       final hostParts = host.split('.');
-      if (hostParts.length < 3) {
-        throw RedirectlyError.linkError('Invalid URL format: $originalUrl');
+      if (hostParts.length < 3 || pathSegments.isEmpty) {
+        return null;
       }
-      username = hostParts[0];
-
-      if (pathSegments.isEmpty) {
-        throw RedirectlyError.linkError('No slug found in URL: $originalUrl');
-      }
-      slug = pathSegments[0];
+      return {
+        'username': hostParts[0],
+        'slug': pathSegments[0],
+      };
     } else if (host.contains('localhost') &&
         uri.queryParameters.containsKey('user')) {
       // Development URL: localhost:3000?user=username/slug
       final userParam = uri.queryParameters['user']!;
       final parts = userParam.split('/');
       if (parts.length != 2) {
-        throw RedirectlyError.linkError(
-            'Invalid development URL format: $originalUrl');
+        return null;
       }
-      username = parts[0];
-      slug = parts[1];
-    } else {
-      throw RedirectlyError.linkError('Unrecognized URL format: $originalUrl');
+      return {
+        'username': parts[0],
+        'slug': parts[1],
+      };
     }
 
-    if (_config!.enableDebugLogging) {
-      print('Processing Redirectly link: username=$username, slug=$slug');
-    }
-
-    // Create link click with basic info
-    final linkClick = RedirectlyLinkClick(
-      originalUrl: originalUrl,
-      slug: slug,
-      username: username,
-      receivedAt: DateTime.now(),
-    );
-
-    // Try to fetch link details from backend
-    try {
-      final linkDetails = await _fetchLinkDetails(username, slug);
-      return linkClick.copyWith(linkDetails: linkDetails);
-    } catch (e) {
-      // Return link click with error but still include basic info
-      return linkClick.copyWith(
-        error:
-            e is RedirectlyError ? e : RedirectlyError.linkError(e.toString()),
-      );
-    }
-  }
-
-  /// Fetch link details from backend
-  Future<RedirectlyLinkDetails> _fetchLinkDetails(
-      String username, String slug) async {
-    // For now, we'll simulate the link resolution since the backend
-    // redirects directly. In a real implementation, you might want to
-    // add an API endpoint that returns link details without redirecting.
-
-    // This is a placeholder - you may want to add a dedicated API endpoint
-    // like GET /api/v1/resolve/{username}/{slug} that returns link details
-    throw RedirectlyError.linkError(
-        'Link resolution not implemented - backend redirects directly');
+    return null;
   }
 
   /// Create a permanent link
@@ -318,26 +304,5 @@ class FlutterRedirectly {
     _httpClient.close();
     _initialized = false;
     _config = null;
-  }
-}
-
-/// Extension to add copyWith method to RedirectlyLinkClick
-extension RedirectlyLinkClickCopyWith on RedirectlyLinkClick {
-  RedirectlyLinkClick copyWith({
-    String? originalUrl,
-    String? slug,
-    String? username,
-    RedirectlyLinkDetails? linkDetails,
-    RedirectlyError? error,
-    DateTime? receivedAt,
-  }) {
-    return RedirectlyLinkClick(
-      originalUrl: originalUrl ?? this.originalUrl,
-      slug: slug ?? this.slug,
-      username: username ?? this.username,
-      linkDetails: linkDetails ?? this.linkDetails,
-      error: error ?? this.error,
-      receivedAt: receivedAt ?? this.receivedAt,
-    );
   }
 }

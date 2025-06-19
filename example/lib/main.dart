@@ -11,9 +11,9 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Redirectly Demo',
+      title: 'Flutter Redirectly Demo (Pure Dart)',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
       home: const MyHomePage(title: 'Flutter Redirectly Demo'),
@@ -31,149 +31,132 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  final FlutterRedirectly _redirectly = FlutterRedirectly();
-  final TextEditingController _slugController = TextEditingController();
-  final TextEditingController _targetController = TextEditingController();
-  final TextEditingController _apiKeyController = TextEditingController();
+  final _redirectly = FlutterRedirectly();
+  final _slugController = TextEditingController();
+  final _targetController = TextEditingController();
 
+  String _status = 'Not initialized';
+  List<RedirectlyLink> _links = [];
   List<RedirectlyLinkClick> _linkClicks = [];
-  bool _isInitialized = false;
-  bool _isLoading = false;
-  String? _errorMessage;
+  bool _initialized = false;
 
   @override
   void initState() {
     super.initState();
-    _setupRedirectly();
+    _initializePlugin();
   }
 
-  Future<void> _setupRedirectly() async {
-    // Listen to incoming link clicks
-    _redirectly.onLinkClick.listen((linkClick) {
-      setState(() {
-        _linkClicks.insert(0, linkClick);
-      });
-
-      // Show a dialog when link is clicked
-      if (mounted) {
-        _showLinkClickDialog(linkClick);
-      }
-    });
-
-    // Check for initial link
-    final initialLink = await _redirectly.getInitialLink();
-    if (initialLink != null) {
-      setState(() {
-        _linkClicks.insert(0, initialLink);
-      });
-      if (mounted) {
-        _showLinkClickDialog(initialLink);
-      }
-    }
-  }
-
-  Future<void> _initialize() async {
-    if (_apiKeyController.text.trim().isEmpty) {
-      setState(() {
-        _errorMessage = 'Please enter your API key';
-      });
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
+  Future<void> _initializePlugin() async {
     try {
-      await _redirectly.initialize(RedirectlyConfig(
-        apiKey: _apiKeyController.text.trim(),
-        enableDebugLogging: true,
-      ));
+      // Replace with your actual API key and base URL
+      await _redirectly.initialize(
+        RedirectlyConfig(
+          apiKey: 'your-api-key-here',
+          baseUrl: 'https://api.redirectly.app',
+          enableDebugLogging: true,
+        ),
+      );
+
+      // Listen to link clicks
+      _redirectly.onLinkClick.listen((linkClick) {
+        setState(() {
+          _linkClicks.insert(0, linkClick);
+          if (_linkClicks.length > 10) {
+            _linkClicks.removeLast();
+          }
+        });
+
+        // Handle the link click
+        if (linkClick.error == null) {
+          _showLinkClickDialog(linkClick);
+        } else {
+          _showErrorDialog('Link Error', linkClick.error!.message);
+        }
+      });
+
+      // Check for initial link
+      final initialLink = await _redirectly.getInitialLink();
+      if (initialLink != null) {
+        setState(() {
+          _linkClicks.insert(0, initialLink);
+        });
+        if (initialLink.error == null) {
+          _showLinkClickDialog(initialLink);
+        }
+      }
 
       setState(() {
-        _isInitialized = true;
+        _status = 'Initialized successfully (Pure Dart - no native code!)';
+        _initialized = true;
       });
+
+      _loadLinks();
     } catch (e) {
       setState(() {
-        _errorMessage = 'Failed to initialize: $e';
-      });
-    } finally {
-      setState(() {
-        _isLoading = false;
+        _status = 'Initialization failed: $e';
       });
     }
+  }
+
+  Future<void> _loadLinks() async {
+    if (!_initialized) return;
+
+    // Note: In pure Dart mode, we focus on link creation and clicking.
+    // You could add a getLinks() method to the plugin if needed.
+    // For now, we'll just track created links locally.
   }
 
   Future<void> _createLink() async {
-    if (!_isInitialized) return;
-
-    if (_slugController.text.trim().isEmpty ||
-        _targetController.text.trim().isEmpty) {
-      setState(() {
-        _errorMessage = 'Please enter both slug and target URL';
-      });
+    if (!_initialized ||
+        _slugController.text.isEmpty ||
+        _targetController.text.isEmpty) {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
     try {
-      await _redirectly.createLink(
-        slug: _slugController.text.trim(),
-        target: _targetController.text.trim(),
+      final link = await _redirectly.createLink(
+        slug: _slugController.text,
+        target: _targetController.text,
+        metadata: {
+          'created_from': 'flutter_example',
+          'timestamp': DateTime.now().toIso8601String(),
+        },
       );
 
-      _slugController.clear();
-      _targetController.clear();
+      setState(() {
+        _links.insert(0, link);
+        _slugController.clear();
+        _targetController.clear();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Link created: ${link.url}')),
+      );
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Failed to create link: $e';
-      });
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      _showErrorDialog('Create Link Error', e.toString());
     }
   }
 
   Future<void> _createTempLink() async {
-    if (!_isInitialized) return;
-
-    if (_targetController.text.trim().isEmpty) {
-      setState(() {
-        _errorMessage = 'Please enter target URL';
-      });
+    if (!_initialized || _targetController.text.isEmpty) {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
     try {
       final tempLink = await _redirectly.createTempLink(
-        target: _targetController.text.trim(),
-        ttlSeconds: 900, // 15 minutes
+        target: _targetController.text,
+        slug: _slugController.text.isNotEmpty ? _slugController.text : null,
+        ttlSeconds: 3600, // 1 hour
       );
 
-      _targetController.clear();
+      setState(() {
+        _targetController.clear();
+        _slugController.clear();
+      });
 
-      if (mounted) {
-        _showTempLinkDialog(tempLink);
-      }
+      _showTempLinkDialog(tempLink);
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Failed to create temp link: $e';
-      });
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      _showErrorDialog('Create Temp Link Error', e.toString());
     }
   }
 
@@ -181,20 +164,33 @@ class _MyHomePageState extends State<MyHomePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Link Clicked'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('URL: ${linkClick.originalUrl}'),
-            Text('Username: ${linkClick.username}'),
-            Text('Slug: ${linkClick.slug}'),
-            if (linkClick.error != null)
-              Text('Error: ${linkClick.error}',
-                  style: const TextStyle(color: Colors.red)),
-            if (linkClick.linkDetails != null)
-              Text('Target: ${linkClick.linkDetails!.target}'),
-          ],
+        title: const Text('Link Clicked! 🎉'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildInfoRow('Original URL', linkClick.originalUrl),
+              _buildInfoRow('Username', linkClick.username),
+              _buildInfoRow('Slug', linkClick.slug),
+              _buildInfoRow('Received At', linkClick.receivedAt.toString()),
+              const SizedBox(height: 16),
+              const Text(
+                'Pure Dart Implementation ✨',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
+              ),
+              const Text(
+                'No native code required!',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -211,21 +207,66 @@ class _MyHomePageState extends State<MyHomePage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Temporary Link Created'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('URL: ${tempLink.url}'),
-            Text('Target: ${tempLink.target}'),
-            Text('Expires: ${tempLink.expiresAt}'),
-            const SizedBox(height: 8),
-            const Text('This link will expire in 15 minutes.'),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildInfoRow('Short URL', tempLink.url),
+              _buildInfoRow('Target', tempLink.target),
+              _buildInfoRow('Expires At', tempLink.expiresAt.toString()),
+              const SizedBox(height: 8),
+              Text(
+                'TTL: ${tempLink.ttlSeconds} seconds',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showErrorDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              '$label:',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontFamily: 'monospace'),
+            ),
           ),
         ],
       ),
@@ -240,131 +281,171 @@ class _MyHomePageState extends State<MyHomePage> {
         title: Text(widget.title),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // API Key Section
-            if (!_isInitialized) ...[
-              const Text(
-                'Initialize Flutter Redirectly',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _apiKeyController,
-                decoration: const InputDecoration(
-                  labelText: 'API Key',
-                  hintText: 'Enter your Redirectly API key',
-                  border: OutlineInputBorder(),
-                ),
-                obscureText: true,
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _isLoading ? null : _initialize,
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Initialize'),
-              ),
-            ],
-
-            // Main Features Section
-            if (_isInitialized) ...[
-              const Text(
-                'Create Link',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _slugController,
-                decoration: const InputDecoration(
-                  labelText: 'Slug',
-                  hintText: 'my-awesome-link',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _targetController,
-                decoration: const InputDecoration(
-                  labelText: 'Target URL',
-                  hintText: 'https://example.com',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _createLink,
-                      child: const Text('Create Permanent Link'),
+            // Status Card
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Plugin Status',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _createTempLink,
-                      child: const Text('Create Temp Link'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // Link Clicks
-              const Text(
-                'Recent Link Clicks',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              if (_linkClicks.isEmpty)
-                const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Text('No link clicks received yet.'),
-                  ),
-                )
-              else
-                ...(_linkClicks.take(5).map((click) => Card(
-                      child: ListTile(
-                        title: Text('${click.username}/${click.slug}'),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('URL: ${click.originalUrl}'),
-                            if (click.error != null)
-                              Text('Error: ${click.error}',
-                                  style: const TextStyle(color: Colors.red)),
-                            if (click.linkDetails != null)
-                              Text('Target: ${click.linkDetails!.target}'),
-                            Text('Received: ${click.receivedAt}'),
-                          ],
-                        ),
-                        isThreeLine: true,
-                        leading: Icon(
-                          click.isSuccessful ? Icons.check_circle : Icons.error,
-                          color: click.isSuccessful ? Colors.green : Colors.red,
+                    const SizedBox(height: 8),
+                    Text(_status),
+                    if (_initialized) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        '✨ Pure Dart Implementation',
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ))),
-            ],
+                      const Text(
+                        'No native code required! Uses app_links + http packages',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
 
-            // Error Message
-            if (_errorMessage != null) ...[
+            if (_initialized) ...[
               const SizedBox(height: 16),
+
+              // Create Link Form
               Card(
-                color: Colors.red.shade50,
                 child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text(
-                    _errorMessage!,
-                    style: const TextStyle(color: Colors.red),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Create Link',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _slugController,
+                        decoration: const InputDecoration(
+                          labelText: 'Slug',
+                          hintText: 'my-awesome-link',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _targetController,
+                        decoration: const InputDecoration(
+                          labelText: 'Target URL',
+                          hintText: 'https://example.com',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          ElevatedButton(
+                            onPressed: _createLink,
+                            child: const Text('Create Permanent Link'),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: _createTempLink,
+                            child: const Text('Create Temp Link'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Links List
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Your Links',
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          IconButton(
+                            onPressed: _loadLinks,
+                            icon: const Icon(Icons.refresh),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (_links.isEmpty)
+                        const Text('No links created yet')
+                      else
+                        ...(_links.map((link) => ListTile(
+                              title: Text(link.slug),
+                              subtitle: Text(link.target),
+                              trailing: Text(
+                                link.url,
+                                style: const TextStyle(
+                                  fontFamily: 'monospace',
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ))),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Link Clicks
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Recent Link Clicks',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      if (_linkClicks.isEmpty)
+                        const Text('No link clicks yet')
+                      else
+                        ...(_linkClicks.take(5).map((click) => ListTile(
+                              title: Text('${click.username}/${click.slug}'),
+                              subtitle: Text(click.originalUrl),
+                              trailing: Text(
+                                click.receivedAt.toString().substring(11, 19),
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              leading: Icon(
+                                click.error != null ? Icons.error : Icons.link,
+                                color: click.error != null
+                                    ? Colors.red
+                                    : Colors.green,
+                              ),
+                            ))),
+                    ],
                   ),
                 ),
               ),
@@ -379,7 +460,6 @@ class _MyHomePageState extends State<MyHomePage> {
   void dispose() {
     _slugController.dispose();
     _targetController.dispose();
-    _apiKeyController.dispose();
     _redirectly.dispose();
     super.dispose();
   }
