@@ -2,8 +2,8 @@ name: flutter_redirectly
 description: A Flutter plugin for Redirectly dynamic links - similar to Firebase Dynamic Links but using your own backend.
 version: 1.0.0
 homepage: https://redirectly.app
-repository: https://github.com/redirectly/flutter_redirectly
-issue_tracker: https://github.com/redirectly/flutter_redirectly/issues
+repository: https://github.com/redirectly-app/flutter_redirectly
+issue_tracker: https://github.com/redirectly-app/flutter_redirectly/issues
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
