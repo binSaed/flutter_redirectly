@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:app_links/app_links.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import 'models/models.dart';
@@ -34,6 +36,9 @@ class FlutterRedirectly {
   bool _initialized = false;
   StreamSubscription<Uri>? _linkSubscription;
 
+  /// Cached plugin version
+  String? _pluginVersion;
+
   /// Initialize the plugin with configuration
   Future<void> initialize(RedirectlyConfig config) async {
     if (_initialized) {
@@ -50,12 +55,63 @@ class FlutterRedirectly {
       _initialized = true;
 
       if (config.enableDebugLogging) {
+        final version = await _getPluginVersion();
         print(
-            'FlutterRedirectly initialized successfully (Pure Dart - no native code!)');
+            'FlutterRedirectly v$version initialized successfully (Pure Dart - no native code!)');
       }
     } catch (e) {
       throw RedirectlyError.configError('Failed to initialize: $e');
     }
+  }
+
+  /// Get the plugin version from pubspec.yaml
+  Future<String> _getPluginVersion() async {
+    if (_pluginVersion != null) return _pluginVersion!;
+
+    try {
+      // Try to read the pubspec.yaml from the plugin package
+      final pubspecString = await rootBundle
+          .loadString('packages/flutter_redirectly/pubspec.yaml');
+      final lines = pubspecString.split('\n');
+
+      for (String line in lines) {
+        if (line.trim().startsWith('version:')) {
+          _pluginVersion = line.split(':')[1].trim();
+          return _pluginVersion!;
+        }
+      }
+    } catch (e) {
+      // Fallback: try to read from the current package's pubspec.yaml
+      try {
+        final pubspecString = await rootBundle.loadString('pubspec.yaml');
+        final lines = pubspecString.split('\n');
+
+        // Check if this is the flutter_redirectly package itself
+        bool isRedirectlyPackage = false;
+        for (String line in lines) {
+          if (line.trim().startsWith('name:') &&
+              line.contains('flutter_redirectly')) {
+            isRedirectlyPackage = true;
+            break;
+          }
+        }
+
+        if (isRedirectlyPackage) {
+          for (String line in lines) {
+            if (line.trim().startsWith('version:')) {
+              _pluginVersion = line.split(':')[1].trim();
+              return _pluginVersion!;
+            }
+          }
+        }
+      } catch (e2) {
+        // Ignore and use fallback
+      }
+    }
+
+    // Fallback version if we can't read from pubspec.yaml
+    _pluginVersion = '2.0.1';
+    return _pluginVersion!;
   }
 
   /// Set up app links for handling deep links
@@ -151,6 +207,13 @@ class FlutterRedirectly {
         print(
             'Link resolved: ${linkResolution.type} link targeting ${linkResolution.target}');
       }
+
+      // Log the click in background (fire-and-forget)
+      _logMobileClick(username, slug, uri).catchError((error) {
+        if (_config!.enableDebugLogging) {
+          print('Failed to log mobile click: $error');
+        }
+      });
     } catch (e) {
       if (_config!.enableDebugLogging) {
         print('Failed to resolve link details: $e');
@@ -519,6 +582,94 @@ class FlutterRedirectly {
         'FlutterRedirectly not initialized. Call initialize() first.',
       );
     }
+  }
+
+  /// Log mobile app click to backend (fire-and-forget)
+  Future<void> _logMobileClick(
+      String username, String slug, Uri originalUri) async {
+    if (_config == null) return;
+
+    try {
+      // Extract UTM parameters from original URI
+      final utmParams = <String, String>{};
+      originalUri.queryParameters.forEach((key, value) {
+        if (key.startsWith('utm_')) {
+          utmParams[key] = value;
+        }
+      });
+
+      // Get plugin version dynamically
+      final pluginVersion = await _getPluginVersion();
+
+      // Collect device information
+      final clickData = <String, dynamic>{
+        'slug': slug,
+        'username': username,
+        'device_type':
+            'mobile', // Could be enhanced with actual device detection
+        'is_mobile_app': true,
+        'app_platform': 'flutter',
+        'session_id': _generateSessionId(),
+        'timezone': DateTime.now().timeZoneOffset.toString(),
+        'metadata': {
+          'original_url': originalUri.toString(),
+          'flutter_plugin_version': pluginVersion,
+          'dart_version': _getDartVersion(),
+        },
+      };
+
+      // Add UTM parameters if present
+      utmParams.forEach((key, value) {
+        clickData[key] = value;
+      });
+
+      // Enhanced device info could be added here
+      // You might want to use packages like:
+      // - device_info_plus for device details
+      // - package_info_plus for app version
+      // - connectivity_plus for network info
+
+      final response = await _httpClient.post(
+        Uri.parse('${_config!.effectiveBaseUrl}/api/v1/clicks'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${_config!.apiKey}',
+        },
+        body: jsonEncode(clickData),
+      );
+
+      if (_config!.enableDebugLogging) {
+        if (response.statusCode == 200) {
+          print(
+              'Mobile click logged successfully: $username/$slug (plugin v$pluginVersion)');
+        } else {
+          print(
+              'Failed to log mobile click: ${response.statusCode} ${response.body}');
+        }
+      }
+    } catch (e) {
+      if (_config!.enableDebugLogging) {
+        print('Error logging mobile click: $e');
+      }
+      // Fail silently - don't break user experience for analytics
+    }
+  }
+
+  /// Get Dart version information
+  String _getDartVersion() {
+    try {
+      // This will return something like "3.2.0 (stable)"
+      return Platform.version.split(' ').first;
+    } catch (e) {
+      return 'unknown';
+    }
+  }
+
+  /// Generate a session ID for tracking user sessions
+  String _generateSessionId() {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final random = DateTime.now().microsecondsSinceEpoch % 10000;
+    return '${timestamp}_$random';
   }
 
   /// Dispose resources
