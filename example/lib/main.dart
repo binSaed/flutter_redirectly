@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_redirectly/flutter_redirectly.dart';
 
 void main() {
@@ -11,143 +12,141 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Redirectly Demo (Pure Dart)',
+      title: 'Flutter Redirectly Example',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Flutter Redirectly Demo'),
+      home: const RedirectlyExample(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  final String title;
+class RedirectlyExample extends StatefulWidget {
+  const RedirectlyExample({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<RedirectlyExample> createState() => _RedirectlyExampleState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  final _redirectly = FlutterRedirectly();
-  final _slugController = TextEditingController();
-  final _targetController = TextEditingController();
-  final _usernameController = TextEditingController();
-  final _resolveSlugController = TextEditingController();
+class _RedirectlyExampleState extends State<RedirectlyExample> {
+  final FlutterRedirectly _redirectly = FlutterRedirectly();
+  final TextEditingController _slugController = TextEditingController();
+  final TextEditingController _targetController = TextEditingController();
+  final TextEditingController _apiKeyController = TextEditingController();
 
+  bool _isInitialized = false;
+  bool _isLoading = false;
   String _status = 'Not initialized';
-  List<RedirectlyLink> _links = [];
-  List<RedirectlyLinkClick> _linkClicks = [];
-  bool _initialized = false;
+  final List<String> _linkHistory = [];
+  RedirectlyLinkClick? _lastLinkClick;
+  RedirectlyLink? _lastCreatedLink;
+  RedirectlyTempLink? _lastCreatedTempLink;
 
   @override
   void initState() {
     super.initState();
-    _initializePlugin();
+    _targetController.text = 'https://example.com';
   }
 
-  Future<void> _initializePlugin() async {
-    try {
-      // Replace with your actual API key and base URL
-      await _redirectly.initialize(
-        RedirectlyConfig(
-          apiKey: 'your-api-key-here',
-          baseUrl: 'https://api.redirectly.app',
-          enableDebugLogging: true,
-        ),
-      );
+  @override
+  void dispose() {
+    _slugController.dispose();
+    _targetController.dispose();
+    _apiKeyController.dispose();
+    super.dispose();
+  }
 
-      // Listen to link clicks
+  Future<void> _initializeRedirectly() async {
+    if (_apiKeyController.text.isEmpty) {
+      _showSnackBar('Please enter your API key', isError: true);
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _status = 'Initializing...';
+    });
+
+    try {
+      await _redirectly.initialize(RedirectlyConfig(
+        apiKey: _apiKeyController.text,
+        enableDebugLogging: true,
+      ));
+
+      // Listen for incoming links when app is running
       _redirectly.onLinkClick.listen((linkClick) {
         setState(() {
-          _linkClicks.insert(0, linkClick);
-          if (_linkClicks.length > 10) {
-            _linkClicks.removeLast();
-          }
+          _lastLinkClick = linkClick;
+          _linkHistory.insert(0, 'App Running: ${linkClick.originalUrl}');
         });
-
-        // Handle the link click
-        if (linkClick.error == null) {
-          _showLinkClickDialog(linkClick);
-        } else {
-          _showErrorDialog('Link Error', linkClick.error!.message);
-        }
+        _showSnackBar('Link received: ${linkClick.slug}');
       });
 
-      // Check for initial link
+      // Check for initial link (when app was opened via link)
       final initialLink = await _redirectly.getInitialLink();
       if (initialLink != null) {
         setState(() {
-          _linkClicks.insert(0, initialLink);
+          _lastLinkClick = initialLink;
+          _linkHistory.insert(0, 'App Launch: ${initialLink.originalUrl}');
         });
-        if (initialLink.error == null) {
-          _showLinkClickDialog(initialLink);
-        }
+        _showSnackBar('Initial link detected: ${initialLink.slug}');
       }
 
       setState(() {
-        _status = 'Initialized successfully (Pure Dart - no native code!)';
-        _initialized = true;
+        _isInitialized = true;
+        _status = 'Ready! Listening for links...';
       });
 
-      _loadLinks();
-    } catch (e) {
+      _showSnackBar('Redirectly initialized successfully!');
+    } on RedirectlyError catch (e) {
       setState(() {
-        _status = 'Initialization failed: $e';
+        _status = 'Error: ${e.message}';
+      });
+      _showSnackBar('Initialization failed: ${e.message}', isError: true);
+    } finally {
+      setState(() {
+        _isLoading = false;
       });
     }
   }
 
-  Future<void> _loadLinks() async {
-    if (!_initialized) return;
-
-    try {
-      final links = await _redirectly.getLinks();
-      setState(() {
-        _links = links;
-      });
-    } catch (e) {
-      _showErrorDialog('Load Links Error', e.toString());
-    }
-  }
-
-  Future<void> _createLink() async {
-    if (!_initialized ||
-        _slugController.text.isEmpty ||
-        _targetController.text.isEmpty) {
+  Future<void> _createPermanentLink() async {
+    if (_slugController.text.isEmpty || _targetController.text.isEmpty) {
+      _showSnackBar('Please enter both slug and target URL', isError: true);
       return;
     }
+
+    setState(() => _isLoading = true);
 
     try {
       final link = await _redirectly.createLink(
         slug: _slugController.text,
         target: _targetController.text,
-        metadata: {
-          'created_from': 'flutter_example',
-          'timestamp': DateTime.now().toIso8601String(),
-        },
+        metadata: {'created_from': 'flutter_example'},
       );
 
       setState(() {
-        _links.insert(0, link);
-        _slugController.clear();
-        _targetController.clear();
+        _lastCreatedLink = link;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Link created: ${link.url}')),
-      );
-    } catch (e) {
-      _showErrorDialog('Create Link Error', e.toString());
+      await Clipboard.setData(ClipboardData(text: link.url));
+      _showSnackBar('Permanent link created and copied to clipboard!');
+      _slugController.clear();
+    } on RedirectlyError catch (e) {
+      _showSnackBar('Failed to create link: ${e.message}', isError: true);
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
   Future<void> _createTempLink() async {
-    if (!_initialized || _targetController.text.isEmpty) {
+    if (_targetController.text.isEmpty) {
+      _showSnackBar('Please enter target URL', isError: true);
       return;
     }
+
+    setState(() => _isLoading = true);
 
     try {
       final tempLink = await _redirectly.createTempLink(
@@ -157,200 +156,25 @@ class _MyHomePageState extends State<MyHomePage> {
       );
 
       setState(() {
-        _targetController.clear();
-        _slugController.clear();
+        _lastCreatedTempLink = tempLink;
       });
 
-      _showTempLinkDialog(tempLink);
-    } catch (e) {
-      _showErrorDialog('Create Temp Link Error', e.toString());
+      await Clipboard.setData(ClipboardData(text: tempLink.url));
+      _showSnackBar('Temporary link created and copied to clipboard!');
+      _slugController.clear();
+    } on RedirectlyError catch (e) {
+      _showSnackBar('Failed to create temp link: ${e.message}', isError: true);
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _resolveLink() async {
-    if (!_initialized ||
-        _usernameController.text.isEmpty ||
-        _resolveSlugController.text.isEmpty) {
-      return;
-    }
-
-    try {
-      final resolution = await _redirectly.resolveLink(
-        _usernameController.text,
-        _resolveSlugController.text,
-      );
-
-      _showLinkResolutionDialog(resolution);
-    } catch (e) {
-      _showErrorDialog('Resolve Link Error', e.toString());
-    }
-  }
-
-  void _showLinkClickDialog(RedirectlyLinkClick linkClick) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Link Clicked! 🎉'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildInfoRow('Original URL', linkClick.originalUrl),
-              _buildInfoRow('Username', linkClick.username),
-              _buildInfoRow('Slug', linkClick.slug),
-              _buildInfoRow('Received At', linkClick.receivedAt.toString()),
-              if (linkClick.isResolved) ...[
-                const SizedBox(height: 16),
-                const Text(
-                  '🔗 Link Details',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                _buildInfoRow('Type', linkClick.linkType ?? 'Unknown'),
-                _buildInfoRow('Target', linkClick.targetUrl ?? 'Unknown'),
-                if (linkClick.linkResolution?.isPermanent == true)
-                  _buildInfoRow(
-                      'Clicks', '${linkClick.linkResolution?.clickCount ?? 0}'),
-                if (linkClick.linkResolution?.isTemporary == true &&
-                    linkClick.linkResolution?.timeUntilExpiration != null)
-                  _buildInfoRow('Expires In',
-                      '${linkClick.linkResolution!.timeUntilExpiration!.inMinutes} minutes'),
-              ],
-              const SizedBox(height: 16),
-              const Text(
-                'Pure Dart Implementation ✨',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green,
-                ),
-              ),
-              const Text(
-                'No native code required!',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey,
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showTempLinkDialog(RedirectlyTempLink tempLink) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Temporary Link Created'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildInfoRow('Short URL', tempLink.url),
-              _buildInfoRow('Target', tempLink.target),
-              _buildInfoRow('Expires At', tempLink.expiresAt.toString()),
-              const SizedBox(height: 8),
-              Text(
-                'TTL: ${tempLink.ttlSeconds} seconds',
-                style: const TextStyle(fontSize: 12),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showLinkResolutionDialog(RedirectlyLinkResolution resolution) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Link Resolution - ${resolution.type.toUpperCase()}'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildInfoRow('Slug', resolution.slug),
-              _buildInfoRow('Target', resolution.target),
-              _buildInfoRow('URL', resolution.url),
-              _buildInfoRow('Type', resolution.type),
-              _buildInfoRow('Created', resolution.createdAt.toString()),
-              if (resolution.isPermanent) ...[
-                _buildInfoRow('Clicks', '${resolution.clickCount ?? 0}'),
-                if (resolution.metadata != null)
-                  _buildInfoRow('Metadata', resolution.metadata.toString()),
-              ],
-              if (resolution.isTemporary) ...[
-                _buildInfoRow('Expires At', resolution.expiresAt.toString()),
-                if (resolution.timeUntilExpiration != null)
-                  _buildInfoRow('Time Left',
-                      '${resolution.timeUntilExpiration!.inMinutes} minutes'),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showErrorDialog(String title, String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
+  void _showSnackBar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
         content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              '$label:',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontFamily: 'monospace'),
-            ),
-          ),
-        ],
+        backgroundColor: isError ? Colors.red : Colors.green,
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -359,72 +183,94 @@ class _MyHomePageState extends State<MyHomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        title: const Text('Flutter Redirectly Example'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Status Card
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Plugin Status',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    Text(
+                      'Status',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
                     Text(_status),
-                    if (_initialized) ...[
-                      const SizedBox(height: 8),
-                      const Text(
-                        '✨ Pure Dart Implementation',
-                        style: TextStyle(
-                          color: Colors.green,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Text(
-                        'No native code required! Uses app_links + http packages',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                    ],
                   ],
                 ),
               ),
             ),
 
-            if (_initialized) ...[
-              const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-              // Create Link Form
+            // Initialization Section
+            if (!_isInitialized) ...[
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Create Link',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
+                      Text(
+                        'Initialize Redirectly',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _apiKeyController,
+                        decoration: const InputDecoration(
+                          labelText: 'API Key',
+                          hintText: 'Enter your Redirectly API key',
+                          border: OutlineInputBorder(),
+                        ),
+                        obscureText: true,
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _initializeRedirectly,
+                          child: _isLoading
+                              ? const CircularProgressIndicator()
+                              : const Text('Initialize'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+
+            // Link Creation Section
+            if (_isInitialized) ...[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Create Links',
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 16),
                       TextField(
                         controller: _slugController,
                         decoration: const InputDecoration(
-                          labelText: 'Slug',
+                          labelText: 'Slug (optional for temp links)',
                           hintText: 'my-awesome-link',
                           border: OutlineInputBorder(),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 16),
                       TextField(
                         controller: _targetController,
                         decoration: const InputDecoration(
@@ -436,14 +282,19 @@ class _MyHomePageState extends State<MyHomePage> {
                       const SizedBox(height: 16),
                       Row(
                         children: [
-                          ElevatedButton(
-                            onPressed: _createLink,
-                            child: const Text('Create Permanent Link'),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed:
+                                  _isLoading ? null : _createPermanentLink,
+                              child: const Text('Create Permanent Link'),
+                            ),
                           ),
                           const SizedBox(width: 8),
-                          ElevatedButton(
-                            onPressed: _createTempLink,
-                            child: const Text('Create Temp Link'),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: _isLoading ? null : _createTempLink,
+                              child: const Text('Create Temp Link (1h)'),
+                            ),
                           ),
                         ],
                       ),
@@ -454,169 +305,97 @@ class _MyHomePageState extends State<MyHomePage> {
 
               const SizedBox(height: 16),
 
-              // Link Resolution Form
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Resolve Link',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: _usernameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Username',
-                          hintText: 'john',
-                          border: OutlineInputBorder(),
+              // Last Created Links
+              if (_lastCreatedLink != null || _lastCreatedTempLink != null) ...[
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Created Links',
+                          style: Theme.of(context).textTheme.titleMedium,
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _resolveSlugController,
-                        decoration: const InputDecoration(
-                          labelText: 'Slug',
-                          hintText: 'my-link',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        onPressed: _resolveLink,
-                        icon: const Icon(Icons.search),
-                        label: const Text('Resolve Link'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Links List
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Your Links',
-                            style: TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                          IconButton(
-                            onPressed: _loadLinks,
-                            icon: const Icon(Icons.refresh),
-                          ),
+                        const SizedBox(height: 8),
+                        if (_lastCreatedLink != null) ...[
+                          Text('Permanent Link:',
+                              style: Theme.of(context).textTheme.bodySmall),
+                          SelectableText(_lastCreatedLink!.url),
+                          Text('Clicks: ${_lastCreatedLink!.clickCount}'),
+                          const SizedBox(height: 8),
                         ],
-                      ),
-                      const SizedBox(height: 8),
-                      if (_links.isEmpty)
-                        const Text('No links created yet')
-                      else
-                        ...(_links.map((link) => ListTile(
-                              title: Text(link.slug),
-                              subtitle: Text(link.target),
-                              trailing: Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    '${link.clickCount} clicks',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                  Text(
-                                    link.url,
-                                    style: const TextStyle(
-                                      fontFamily: 'monospace',
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ))),
-                    ],
+                        if (_lastCreatedTempLink != null) ...[
+                          Text('Temporary Link:',
+                              style: Theme.of(context).textTheme.bodySmall),
+                          SelectableText(_lastCreatedTempLink!.url),
+                          Text('Expires: ${_lastCreatedTempLink!.expiresAt}'),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(height: 16),
+              ],
 
-              const SizedBox(height: 16),
-
-              // Link Clicks
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Recent Link Clicks',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      if (_linkClicks.isEmpty)
-                        const Text('No link clicks yet')
-                      else
-                        ...(_linkClicks.take(5).map((click) => ListTile(
-                              title: Text('${click.username}/${click.slug}'),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(click.originalUrl),
-                                  if (click.isResolved)
-                                    Text(
-                                      '→ ${click.targetUrl} (${click.linkType})',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.green,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              trailing: Text(
-                                click.receivedAt.toString().substring(11, 19),
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                              leading: Icon(
-                                click.error != null
-                                    ? Icons.error
-                                    : click.isResolved
-                                        ? Icons.link_rounded
-                                        : Icons.link,
-                                color: click.error != null
-                                    ? Colors.red
-                                    : click.isResolved
-                                        ? Colors.green
-                                        : Colors.orange,
-                              ),
-                            ))),
-                    ],
+              // Last Received Link
+              if (_lastLinkClick != null) ...[
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Last Received Link',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        Text('URL: ${_lastLinkClick!.originalUrl}'),
+                        Text('Username: ${_lastLinkClick!.username}'),
+                        Text('Slug: ${_lastLinkClick!.slug}'),
+                        Text('Received: ${_lastLinkClick!.receivedAt}'),
+                        if (_lastLinkClick!.error != null)
+                          Text(
+                            'Error: ${_lastLinkClick!.error!.message}',
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(height: 16),
+              ],
+
+              // Link History
+              if (_linkHistory.isNotEmpty) ...[
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Link History',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        ..._linkHistory.take(5).map((link) => Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2),
+                              child: Text(
+                                link,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            )),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ],
           ],
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _slugController.dispose();
-    _targetController.dispose();
-    _usernameController.dispose();
-    _resolveSlugController.dispose();
-    _redirectly.dispose();
-    super.dispose();
   }
 }
