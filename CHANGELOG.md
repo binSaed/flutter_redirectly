@@ -5,159 +5,91 @@ All notable changes to the Flutter Redirectly plugin will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.1.0] - 2025-01-15
-
-### 🚀 NEW: Complete Link Management & Resolution API
-
-Added comprehensive link management functionality that was missing from the initial pure Dart release.
-
-#### ✅ New Backend Endpoints
-
-- **Link Resolution**: `GET /api/v1/resolve/{username}/{slug}` - Resolve any link without redirecting
-- **Individual Link Access**: `GET /api/v1/links/{slug}` - Get specific permanent link details
-- **Temporary Link Access**: `GET /api/v1/temp-links/{slug}` - Get specific temporary link details
-- **Link Management**: `PUT/DELETE /api/v1/links/{slug}` - Update/delete permanent links
-- **Temp Link Management**: `DELETE /api/v1/temp-links/{slug}` - Delete temporary links
-
-#### ✅ New Flutter SDK Methods
-
-- **`getLinks()`** - Fetch all user's permanent links
-- **`getLink(slug)`** - Get specific permanent link by slug
-- **`getTempLink(slug)`** - Get specific temporary link by slug
-- **`resolveLink(username, slug)`** - Resolve any link by username/slug (public)
-- **`updateLink(slug, target, metadata)`** - Update permanent link
-- **`deleteLink(slug)`** - Delete permanent link
-- **`deleteTempLink(slug)`** - Delete temporary link
-
-#### ✅ Enhanced Models
-
-- **`RedirectlyLinkResolution`** - Universal model for resolved links (permanent or temporary)
-- **Enhanced `RedirectlyLinkClick`** - Now includes resolved link details with `linkResolution` field
-- **Smart Link Processing** - Automatically resolves link details when clicked
-
-#### ✅ Improved Example App
-
-- **Link Resolution Demo** - Test resolving links by username/slug
-- **Enhanced Link Clicks** - Shows resolved link details (target, type, clicks, expiration)
-- **Complete CRUD Operations** - Create, read, update, delete links
-- **Better UI** - More informative displays with link details
-
-#### 📈 Benefits
-
-- **Complete API Coverage** - Now supports all backend link operations
-- **Enhanced Link Clicks** - Get full link details when links are clicked
-- **Better User Experience** - Rich link information in your app
-- **Full CRUD Support** - Manage links programmatically
-- **Public Resolution** - Resolve any user's links without authentication
-
-## [2.0.0] - 2025-01-15
-
-### 🎉 MAJOR: Pure Dart Implementation - No Native Code Required
-
-This is a **BREAKING CHANGE** that completely removes all native platform code in favor of a pure Dart implementation.
-
-#### ✅ What's New
-
-- **Pure Dart**: Completely eliminated Android and iOS native code - now 100% Dart!
-- **Simplified Architecture**: Uses `app_links` for deep link handling and `http` for API calls
-- **Zero Native Dependencies**: No more method channels, platform interfaces, or native implementations
-- **Faster Development**: No need to deal with Android Kotlin or iOS Swift code
-- **Easier Debugging**: All logic runs in Dart, making debugging much simpler
-- **Single Source of Truth**: All HTTP requests, JSON parsing, and error handling in one place
-
-#### 🔧 Technical Changes
-
-- Removed all Android Kotlin code (`FlutterRedirectlyPlugin.kt`)
-- Removed all iOS Swift code (`FlutterRedirectlyPlugin.swift`)
-- Removed method channels and platform interfaces
-- Removed Android `build.gradle` and iOS `.podspec` files
-- Simplified plugin structure - no longer requires platform-specific configuration
-- Direct HTTP API calls using Dart's `http` package
-- Pure Dart URL parsing using `Uri` class
-- Streamlined link click handling with app_links
-
-#### ⚠️ Breaking Changes
-
-- No longer a Flutter plugin - now a pure Dart package
-- Removed `RedirectlyLinkDetails` model (links redirect directly, details not fetched)
-- Simplified `RedirectlyLinkClick` model (removed `linkDetails` field)
-- No platform-specific configuration required
-
-#### 📈 Benefits
-
-- **Smaller Bundle Size**: No native code means smaller app size
-- **Faster Builds**: No native compilation step
-- **Easier Testing**: Pure Dart code is easier to unit test
-- **Better Error Messages**: Consistent error handling across all platforms
-- **Simpler Maintenance**: Single codebase instead of 3 (Dart + Android + iOS)
-
-## [1.0.1] - 2025-01-15
+## [2.0.4] - 2025-01-15
 
 ### Fixed
 
-- **iOS Integration**: Fixed CocoaPods discovery issue by moving `flutter_redirectly.podspec` to `ios/` directory
-- **Platform Configuration**: Updated `pubspec.yaml` to explicitly specify podspec path for iOS
-- This resolves the error: `[!] No podspec found for flutter_redirectly in .symlinks/plugins/flutter_redirectly/ios`
+- Minor bug fixes and stability improvements
 
-## [1.0.0] - 2024-01-15
+## [2.0.3] - 2025-01-15
 
-### Added
+### Fixed
 
-- Initial release of Flutter Redirectly plugin
-- **Core Features:**
-  - Create permanent and temporary links via Redirectly API
-  - Handle deep links in all app states (cold start, background, foreground)
-  - Stream-based link click handling
-  - Comprehensive error handling with typed errors
-  - Support for link metadata
-  - Built on `app_links` for reliable cross-platform link handling
+- Minor bug fixes and stability improvements
 
-- **API Integration:**
-  - Full integration with Redirectly backend API
-  - Support for `/api/v1/links` (permanent links)
-  - Support for `/api/v1/temp-links` (temporary links)
-  - Bearer token authentication
-  - Automatic URL parsing for subdomain format (`username.redirectly.app/slug`)
+## [2.0.2] - 2025-01-15
 
-- **Platform Support:**
-  - Android implementation with native Kotlin
-  - iOS implementation with native Swift
-  - Support for both production and development URL formats
+### Fixed
 
-- **Developer Experience:**
-  - Simple initialization with API key only
-  - Type-safe models for all data structures
-  - Comprehensive documentation and examples
-  - Debug logging support
-  - Complete example app demonstrating all features
+- Minor bug fixes and stability improvements
 
-- **Models:**
-  - `RedirectlyConfig` - Plugin configuration
-  - `RedirectlyLink` - Permanent link representation
-  - `RedirectlyTempLink` - Temporary link with expiration
-  - `RedirectlyLinkClick` - Incoming link click data
-  - `RedirectlyError` - Typed error handling
-  - `RedirectlyLinkDetails` - Link metadata and details
+## [2.0.1] - 2025-01-15
 
-- **Error Handling:**
-  - `RedirectlyErrorType.api` - API-related errors
-  - `RedirectlyErrorType.network` - Network connectivity errors
-  - `RedirectlyErrorType.configuration` - Setup/config errors
-  - `RedirectlyErrorType.linkResolution` - Link processing errors
+### Fixed
 
-### Technical Details
+- Minor bug fixes and stability improvements
 
-- Minimum Flutter SDK: 3.0.0
-- Minimum Dart SDK: 3.0.0
-- Dependencies: `app_links ^6.3.2`, `http ^1.2.2`, `plugin_platform_interface ^2.1.8`
-- Platform channels for native communication
-- Event streams for real-time link handling
-- HTTP client for direct API communication
+## [2.0.0] - 2025-01-15
 
-### Documentation
+### 🎉 Initial Release
 
-- Complete API reference
-- Setup instructions for Android and iOS
-- Usage examples for all features
-- Error handling patterns
-- Example app with full implementation
+Flutter package for creating and handling dynamic links using your own Redirectly backend. **Pure Dart implementation - no native code required!**
+
+#### ✅ Core Features
+
+- **Create Links**: Generate permanent and temporary links via Redirectly API
+- **Handle Deep Links**: Process links in all app states (cold start, background, foreground)
+- **Stream-based Events**: Real-time link click notifications
+- **Error Handling**: Comprehensive error handling with typed errors
+- **Pure Dart**: Zero native dependencies - uses `app_links` + `http` packages only
+
+#### ✅ API Integration
+
+- Full integration with Redirectly backend API
+- Support for permanent links (`/api/v1/links`)
+- Support for temporary links (`/api/v1/temp-links`)
+- Bearer token authentication
+- Custom metadata support for links
+
+#### ✅ Platform Support
+
+- **Android**: Deep link handling via intent filters
+- **iOS**: Universal Links with Associated Domains
+- **Cross-platform**: Single Dart codebase works everywhere
+
+#### ✅ Developer Experience
+
+- Simple configuration with just an API key
+- Type-safe models for all data structures
+- Comprehensive example app
+- Debug logging support
+- Easy setup with minimal configuration
+
+#### ✅ Models & API
+
+- `RedirectlyConfig` - Plugin configuration
+- `RedirectlyLink` - Permanent link representation  
+- `RedirectlyTempLink` - Temporary link with expiration
+- `RedirectlyLinkClick` - Incoming link click data
+- `RedirectlyError` - Typed error handling
+
+#### ✅ Error Types
+
+- `RedirectlyErrorType.api` - API-related errors (4xx, 5xx)
+- `RedirectlyErrorType.network` - Network connectivity issues
+- `RedirectlyErrorType.configuration` - Setup/initialization errors
+- `RedirectlyErrorType.linkResolution` - Link parsing/processing errors
+
+#### 📦 Dependencies
+
+- Flutter SDK: >=3.0.0
+- Dart SDK: >=3.0.0
+- `app_links: ^6.3.2` - Cross-platform deep link handling
+- `http: ^1.2.2` - HTTP client for API calls
+
+#### 📚 Documentation
+
+- Complete setup instructions for Android and iOS
+- Comprehensive API reference
+- Working example app with all features
+- Step-by-step integration guide
