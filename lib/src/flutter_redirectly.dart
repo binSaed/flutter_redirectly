@@ -5,8 +5,10 @@ import 'dart:io';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 import 'models/models.dart';
+import 'services/device_service.dart';
 
 /// Pure Dart Flutter Redirectly plugin
 ///
@@ -33,11 +35,17 @@ class FlutterRedirectly {
   /// HTTP client
   final _httpClient = http.Client();
 
+  /// Device service for collecting device information
+  final _deviceService = DeviceService();
+
   bool _initialized = false;
   StreamSubscription<Uri>? _linkSubscription;
 
   /// Cached plugin version
   String? _pluginVersion;
+
+  /// File name for tracking app install
+  static const String _trackingFileName = '.redirectly_install_tracked';
 
   /// Initialize the plugin with configuration
   Future<void> initialize(RedirectlyConfig config) async {
@@ -59,6 +67,9 @@ class FlutterRedirectly {
         print(
             'FlutterRedirectly v$version initialized successfully (Pure Dart - no native code!)');
       }
+
+      // Automatically track app install (one-time only)
+      _trackAppInstallIfNeeded();
     } catch (e) {
       throw RedirectlyError.configError('Failed to initialize: $e');
     }
@@ -670,6 +681,177 @@ class FlutterRedirectly {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final random = DateTime.now().microsecondsSinceEpoch % 10000;
     return '${timestamp}_$random';
+  }
+
+  /// Track app install if it hasn't been tracked yet
+  Future<void> _trackAppInstallIfNeeded() async {
+    try {
+      final hasBeenLogged = await _hasAppInstallBeenTracked();
+
+      if (!hasBeenLogged) {
+        if (_config?.enableDebugLogging == true) {
+          print('First app launch detected - tracking app install');
+        }
+
+        final response = await _logAppInstallInternal();
+
+        // Mark as logged regardless of success to avoid repeated attempts
+        await _markAppInstallAsTracked();
+
+        if (_config?.enableDebugLogging == true) {
+          if (response.matched) {
+            print(
+                'App install matched to deferred click: ${response.username}/${response.slug}');
+          } else {
+            print('App install tracked as organic');
+          }
+        }
+      } else {
+        if (_config?.enableDebugLogging == true) {
+          print('App install already tracked - skipping');
+        }
+      }
+    } catch (e) {
+      if (_config?.enableDebugLogging == true) {
+        print('Failed to track app install: $e');
+      }
+      // Don't throw - this shouldn't break initialization
+    }
+  }
+
+  /// Check if app install has been tracked by looking for tracking file
+  Future<bool> _hasAppInstallBeenTracked() async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/$_trackingFileName');
+      return await file.exists();
+    } catch (e) {
+      if (_config?.enableDebugLogging == true) {
+        print('Error checking install tracking file: $e');
+      }
+      // If we can't check, assume it hasn't been tracked to be safe
+      return false;
+    }
+  }
+
+  /// Mark app install as tracked by creating tracking file
+  Future<void> _markAppInstallAsTracked() async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/$_trackingFileName');
+
+      // Create a simple tracking file with timestamp
+      final data = {
+        'tracked_at': DateTime.now().toIso8601String(),
+        'plugin_version': await _getPluginVersion(),
+      };
+
+      await file.writeAsString(jsonEncode(data));
+
+      if (_config?.enableDebugLogging == true) {
+        print('App install tracking file created at: ${file.path}');
+      }
+    } catch (e) {
+      if (_config?.enableDebugLogging == true) {
+        print('Error creating install tracking file: $e');
+      }
+      // Don't throw - tracking failure shouldn't break the app
+    }
+  }
+
+  /// Internal method to log app install
+  Future<RedirectlyAppInstallResponse> _logAppInstallInternal() async {
+    try {
+      // Collect device information
+      final deviceInfo = _deviceService.getDeviceInfo();
+
+      // Get plugin version
+      final pluginVersion = await _getPluginVersion();
+
+      // Get app version info if available
+      String? appVersion;
+      String? appBuildNumber;
+
+      try {
+        // Try to get app version from package info
+        // This is a best-effort attempt - if package_info_plus is available
+        final pubspecString = await rootBundle.loadString('pubspec.yaml');
+        final lines = pubspecString.split('\n');
+        for (String line in lines) {
+          if (line.trim().startsWith('version:')) {
+            final versionLine = line.split(':')[1].trim();
+            final parts = versionLine.split('+');
+            appVersion = parts[0];
+            if (parts.length > 1) {
+              appBuildNumber = parts[1];
+            }
+            break;
+          }
+        }
+      } catch (e) {
+        // Ignore - app version info is optional
+      }
+
+      // Build request with device info
+      final request = RedirectlyAppInstallRequest(
+        appPlatform: _deviceService.getAppPlatform(),
+        appVersion: appVersion,
+        appBuildNumber: appBuildNumber,
+        os: deviceInfo['os'] as String?,
+        osVersion: deviceInfo['os_version'] as String?,
+        language: deviceInfo['language'] as String?,
+        timezone: deviceInfo['timezone'] as String?,
+        metadata: {
+          'flutter_plugin_version': pluginVersion,
+          'dart_version': deviceInfo['dart_version'],
+          'platform': deviceInfo['platform'],
+          'is_mobile': deviceInfo['is_mobile'],
+          'api_version': 'v1',
+          'logged_via': 'flutter_sdk_auto',
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      );
+
+      if (_config!.enableDebugLogging) {
+        print('Logging app install automatically: ${request.toString()}');
+      }
+
+      final response = await _httpClient.post(
+        Uri.parse('${_config!.effectiveBaseUrl}/api/v1/app-installs'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${_config!.apiKey}',
+        },
+        body: jsonEncode(request.toJson()),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        final installResponse = RedirectlyAppInstallResponse.fromJson(json);
+
+        if (_config!.enableDebugLogging) {
+          print(
+              'App install logged successfully: ${installResponse.toString()}');
+        }
+
+        return installResponse;
+      } else {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        throw RedirectlyError.apiError(
+          message: error['error'] as String? ?? 'Failed to log app install',
+          statusCode: response.statusCode,
+          details: error,
+        );
+      }
+    } catch (e) {
+      if (_config!.enableDebugLogging) {
+        print('Failed to log app install: $e');
+      }
+
+      if (e is RedirectlyError) rethrow;
+      throw RedirectlyError.networkError(
+          'Network error while logging app install: $e');
+    }
   }
 
   /// Dispose resources
