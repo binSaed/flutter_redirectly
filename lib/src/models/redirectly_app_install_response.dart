@@ -71,16 +71,12 @@ class RedirectlyAppInstallLink {
   /// Link metadata
   final Map<String, dynamic>? metadata;
 
-  /// User ID who owns the link
-  final String userId;
-
   const RedirectlyAppInstallLink({
     required this.slug,
     required this.target,
     required this.url,
     required this.createdAt,
     this.metadata,
-    required this.userId,
   });
 
   /// Create from JSON
@@ -91,7 +87,6 @@ class RedirectlyAppInstallLink {
       url: json['url'] as String,
       createdAt: DateTime.parse(json['created_at'] as String),
       metadata: json['metadata'] as Map<String, dynamic>?,
-      userId: json['user_id'] as String,
     );
   }
 
@@ -103,12 +98,11 @@ class RedirectlyAppInstallLink {
       'url': url,
       'created_at': createdAt.toIso8601String(),
       if (metadata != null) 'metadata': metadata,
-      'user_id': userId,
     };
   }
 
   @override
   String toString() {
-    return 'RedirectlyAppInstallLink{slug: $slug, target: $target, url: $url, createdAt: $createdAt, metadata: $metadata, userId: $userId}';
+    return 'RedirectlyAppInstallLink{slug: $slug, target: $target, url: $url, createdAt: $createdAt, metadata: $metadata }';
   }
 }

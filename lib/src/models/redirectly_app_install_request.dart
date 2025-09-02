@@ -70,3 +70,17 @@ class RedirectlyAppInstallRequest {
     return 'RedirectlyAppInstallRequest{appPlatform: $appPlatform, appVersion: $appVersion, appBuildNumber: $appBuildNumber, os: $os, osVersion: $osVersion, language: $language, timezone: $timezone, metadata: $metadata}';
   }
 }
+
+class AppInfo {
+  final String appName;
+  final String packageName;
+  final String version;
+  final String buildNumber;
+
+  AppInfo({
+    required this.appName,
+    required this.packageName,
+    required this.version,
+    required this.buildNumber,
+  });
+}

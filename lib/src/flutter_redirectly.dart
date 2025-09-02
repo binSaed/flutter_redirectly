@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'models/models.dart';
@@ -721,6 +722,7 @@ class FlutterRedirectly {
 
   /// Check if app install has been tracked by looking for tracking file
   Future<bool> _hasAppInstallBeenTracked() async {
+    return false;
     try {
       final directory = await getApplicationDocumentsDirectory();
       final file = File('${directory.path}/$_trackingFileName');
@@ -759,6 +761,22 @@ class FlutterRedirectly {
     }
   }
 
+  Future<AppInfo> _getAppInfo() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+
+    String appName = packageInfo.appName;
+    String packageName = packageInfo.packageName;
+    String version = packageInfo.version; // e.g. "1.0.3"
+    String buildNumber = packageInfo.buildNumber; // e.g. "42"
+
+    return AppInfo(
+      appName: appName,
+      packageName: packageName,
+      version: version,
+      buildNumber: buildNumber,
+    );
+  }
+
   /// Internal method to log app install
   Future<RedirectlyAppInstallResponse> _logAppInstallInternal() async {
     try {
@@ -768,35 +786,13 @@ class FlutterRedirectly {
       // Get plugin version
       final pluginVersion = await _getPluginVersion();
 
-      // Get app version info if available
-      String? appVersion;
-      String? appBuildNumber;
-
-      try {
-        // Try to get app version from package info
-        // This is a best-effort attempt - if package_info_plus is available
-        final pubspecString = await rootBundle.loadString('pubspec.yaml');
-        final lines = pubspecString.split('\n');
-        for (String line in lines) {
-          if (line.trim().startsWith('version:')) {
-            final versionLine = line.split(':')[1].trim();
-            final parts = versionLine.split('+');
-            appVersion = parts[0];
-            if (parts.length > 1) {
-              appBuildNumber = parts[1];
-            }
-            break;
-          }
-        }
-      } catch (e) {
-        // Ignore - app version info is optional
-      }
+      final appInfo = await _getAppInfo();
 
       // Build request with device info
       final request = RedirectlyAppInstallRequest(
         appPlatform: _deviceService.getAppPlatform(),
-        appVersion: appVersion,
-        appBuildNumber: appBuildNumber,
+        appVersion: appInfo.version,
+        appBuildNumber: appInfo.buildNumber,
         os: deviceInfo['os'] as String?,
         osVersion: deviceInfo['os_version'] as String?,
         language: deviceInfo['language'] as String?,
