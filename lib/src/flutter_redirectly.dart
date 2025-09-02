@@ -33,6 +33,10 @@ class FlutterRedirectly {
   final _linkClickController =
       StreamController<RedirectlyLinkClick>.broadcast();
 
+  /// Stream controller for app install events
+  final _appInstallController =
+      StreamController<RedirectlyAppInstallResponse>.broadcast();
+
   /// HTTP client
   final _httpClient = http.Client();
 
@@ -566,6 +570,10 @@ class FlutterRedirectly {
   /// Stream of incoming link clicks
   Stream<RedirectlyLinkClick> get onLinkClick => _linkClickController.stream;
 
+  /// Stream of app install events
+  Stream<RedirectlyAppInstallResponse> get onAppInstalled =>
+      _appInstallController.stream;
+
   /// Get the initial link if app was opened via a link
   Future<RedirectlyLinkClick?> getInitialLink() async {
     _ensureInitialized();
@@ -695,6 +703,9 @@ class FlutterRedirectly {
         }
 
         final response = await _logAppInstallInternal();
+
+        // Emit the app install event to the stream
+        _appInstallController.add(response);
 
         // Mark as logged regardless of success to avoid repeated attempts
         await _markAppInstallAsTracked();
@@ -853,6 +864,7 @@ class FlutterRedirectly {
   Future<void> dispose() async {
     await _linkSubscription?.cancel();
     await _linkClickController.close();
+    await _appInstallController.close();
     _httpClient.close();
     _initialized = false;
     _config = null;

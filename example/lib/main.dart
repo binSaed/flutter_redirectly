@@ -33,7 +33,8 @@ class _RedirectlyExampleState extends State<RedirectlyExample> {
   final FlutterRedirectly _redirectly = FlutterRedirectly();
   final TextEditingController _slugController = TextEditingController();
   final TextEditingController _targetController = TextEditingController();
-  final TextEditingController _apiKeyController = TextEditingController();
+  final TextEditingController _apiKeyController =
+      TextEditingController(text: "20c9cbb4-7931-43f9-bce3-f7cf0f1f5911");
 
   bool _isInitialized = false;
   bool _isLoading = false;
@@ -42,6 +43,7 @@ class _RedirectlyExampleState extends State<RedirectlyExample> {
   RedirectlyLinkClick? _lastLinkClick;
   RedirectlyLink? _lastCreatedLink;
   RedirectlyTempLink? _lastCreatedTempLink;
+  RedirectlyAppInstallResponse? _lastAppInstall;
 
   @override
   void initState() {
@@ -81,6 +83,19 @@ class _RedirectlyExampleState extends State<RedirectlyExample> {
           _linkHistory.insert(0, 'App Running: ${linkClick.originalUrl}');
         });
         _showSnackBar('Link received: ${linkClick.slug}');
+      });
+
+      // Listen for app install events
+      _redirectly.onAppInstalled.listen((appInstall) {
+        setState(() {
+          _lastAppInstall = appInstall;
+        });
+        if (appInstall.matched) {
+          _showSnackBar(
+              'App install matched to referral: ${appInstall.username}/${appInstall.slug}');
+        } else {
+          _showSnackBar('App install tracked as organic');
+        }
       });
 
       // Check for initial link (when app was opened via link)
@@ -330,6 +345,40 @@ class _RedirectlyExampleState extends State<RedirectlyExample> {
                               style: Theme.of(context).textTheme.bodySmall),
                           SelectableText(_lastCreatedTempLink!.url),
                           Text('Expires: ${_lastCreatedTempLink!.expiresAt}'),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              // App Install Information
+              if (_lastAppInstall != null) ...[
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'App Install Information',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        Text('Type: ${_lastAppInstall!.type}'),
+                        Text('Matched: ${_lastAppInstall!.matched}'),
+                        if (_lastAppInstall!.username != null)
+                          Text('Username: ${_lastAppInstall!.username}'),
+                        if (_lastAppInstall!.slug != null)
+                          Text('Slug: ${_lastAppInstall!.slug}'),
+                        if (_lastAppInstall!.link != null) ...[
+                          const SizedBox(height: 8),
+                          Text('Referral Link:',
+                              style: Theme.of(context).textTheme.bodySmall),
+                          SelectableText(_lastAppInstall!.link!.url),
+                          Text('Target: ${_lastAppInstall!.link!.target}'),
+                          Text('Created: ${_lastAppInstall!.link!.createdAt}'),
                         ],
                       ],
                     ),
