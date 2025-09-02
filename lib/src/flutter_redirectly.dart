@@ -722,7 +722,6 @@ class FlutterRedirectly {
 
   /// Check if app install has been tracked by looking for tracking file
   Future<bool> _hasAppInstallBeenTracked() async {
-    return false;
     try {
       final directory = await getApplicationDocumentsDirectory();
       final file = File('${directory.path}/$_trackingFileName');
