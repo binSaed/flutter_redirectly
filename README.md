@@ -6,7 +6,7 @@ A Flutter package for creating and handling dynamic links using your own Redirec
 
 ```yaml
 dependencies:
-  flutter_redirectly: ^2.0.0
+  flutter_redirectly: ^2.1.1
 ```
 
 ## Quick Setup
@@ -75,7 +75,51 @@ if (initialLink != null) {
 }
 ```
 
-### 5. Create Links
+### 5. Track App Installs
+
+The plugin automatically tracks app installs on first launch. Listen for install attribution events:
+
+```dart
+// Listen for app install events
+redirectly.onAppInstalled.listen((installEvent) {
+  if (installEvent.matched) {
+    // User installed app after clicking a Redirectly link
+    print('Install attributed to: ${installEvent.username}/${installEvent.slug}');
+    print('Original click time: ${installEvent.clickedAt}');
+    
+    // Show personalized onboarding or deep link to specific content
+    _handleAttributedInstall(installEvent);
+  } else {
+    // Organic install (no prior link click)
+    print('Organic app install');
+    _handleOrganicInstall();
+  }
+});
+
+void _handleAttributedInstall(RedirectlyAppInstallResponse install) {
+  // Example: Navigate to the content they were trying to reach
+  if (install.linkResolution != null) {
+    final target = install.linkResolution!.target;
+    // Navigate to target URL or handle accordingly
+  }
+}
+```
+
+**What gets tracked:**
+
+- First app launch only (subsequent launches are ignored)
+- Device information (OS, version, timezone, language)
+- App information (version, build number)
+- Attribution matching with prior link clicks (if any)
+
+**Privacy-friendly:**
+
+- No personal information is collected
+- Only standard app/device metadata
+- Tracking file prevents duplicate logging
+- All data stays within your Redirectly account
+
+### 6. Create Links
 
 ```dart
 // Create a permanent link
@@ -91,6 +135,93 @@ final tempLink = await redirectly.createTempLink(
   ttlSeconds: 3600,
 );
 print('Temp link: ${tempLink.url}');
+```
+
+## Complete Attribution Flow
+
+Here's how to implement a complete attribution flow:
+
+```dart
+class MyApp extends StatefulWidget {
+  @override
+  _MyAppState createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  final redirectly = FlutterRedirectly();
+  
+  @override
+  void initState() {
+    super.initState();
+    _initializeRedirectly();
+  }
+  
+  Future<void> _initializeRedirectly() async {
+    await redirectly.initialize(RedirectlyConfig(
+      apiKey: 'your-api-key',
+      debug: true,
+    ));
+    
+    // Handle ongoing link clicks
+    redirectly.onLinkClick.listen(_handleLinkClick);
+    
+    // Handle app install attribution
+    redirectly.onAppInstalled.listen(_handleAppInstall);
+    
+    // Handle initial link if app was opened via link
+    final initialLink = await redirectly.getInitialLink();
+    if (initialLink != null) {
+      _handleLinkClick(initialLink);
+    }
+  }
+  
+  void _handleLinkClick(RedirectlyLinkClick linkClick) {
+    print('Link clicked: ${linkClick.slug}');
+    
+    if (linkClick.linkResolution != null) {
+      // Navigate based on link target
+      _navigateToTarget(linkClick.linkResolution!.target);
+    }
+  }
+  
+  void _handleAppInstall(RedirectlyAppInstallResponse install) {
+    if (install.matched) {
+      // Show attributed install welcome
+      _showAttributedWelcome(install);
+    } else {
+      // Show standard onboarding
+      _showStandardOnboarding();
+    }
+  }
+  
+  void _showAttributedWelcome(RedirectlyAppInstallResponse install) {
+    // Example: Show personalized welcome message
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Welcome!'),
+        content: Text('Thanks for installing from our ${install.slug} link!'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              // Navigate to the content they were originally trying to reach
+              if (install.linkResolution != null) {
+                _navigateToTarget(install.linkResolution!.target);
+              }
+            },
+            child: Text('Get Started'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _navigateToTarget(String target) {
+    // Handle navigation based on your app's routing
+    print('Navigating to: $target');
+  }
+}
 ```
 
 ## Error Handling
@@ -139,7 +270,37 @@ RedirectlyLinkClick({
   DateTime receivedAt,
   RedirectlyError? error,
 })
+
+// App install attribution
+RedirectlyAppInstallResponse({
+  bool matched,              // Whether install was attributed to a link
+  String? username, slug,    // Attribution details (if matched)
+  DateTime? clickedAt,       // When original link was clicked (if matched)
+  RedirectlyLinkResolution? linkResolution, // Original link details
+  DateTime loggedAt,         // When install was logged
+})
 ```
+
+### Streams
+
+```dart
+// Listen for link clicks (app running or launch)
+Stream<RedirectlyLinkClick> redirectly.onLinkClick
+
+// Listen for app install events (first launch only)
+Stream<RedirectlyAppInstallResponse> redirectly.onAppInstalled
+```
+
+## Testing Install Attribution
+
+During development, you can test install attribution by:
+
+1. **Delete and reinstall your app** to simulate first install
+2. **Clear app data** on Android or **delete from device** on iOS  
+3. **Click a Redirectly link** → install app → open app
+4. The `onAppInstalled` event should fire with `matched: true`
+
+The plugin automatically prevents duplicate install logging by creating a tracking file on first launch.
 
 ## Example
 
