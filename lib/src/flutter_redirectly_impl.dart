@@ -7,21 +7,24 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:rxdart/rxdart.dart';
 
-import 'models/models.dart';
+import '../flutter_redirectly.dart';
 import 'services/device_service.dart';
 
-/// Pure Dart Flutter Redirectly plugin
+/// Implementation of Flutter Redirectly plugin
 ///
 /// This class provides functionality similar to Firebase Dynamic Links
 /// but uses your own Redirectly backend. No native code required!
-class FlutterRedirectly {
-  static final FlutterRedirectly _instance = FlutterRedirectly._internal();
+final class FlutterRedirectlyImpl implements FlutterRedirectly {
+  static final FlutterRedirectlyImpl _instance =
+      FlutterRedirectlyImpl._internal();
 
   /// Singleton instance
-  factory FlutterRedirectly() => _instance;
+  static FlutterRedirectlyImpl get instance => _instance;
 
-  FlutterRedirectly._internal();
+  /// Private constructor
+  FlutterRedirectlyImpl._internal();
 
   /// App links instance for handling deep links
   final _appLinks = AppLinks();
@@ -33,9 +36,8 @@ class FlutterRedirectly {
   final _linkClickController =
       StreamController<RedirectlyLinkClick>.broadcast();
 
-  /// Stream controller for app install events
-  final _appInstallController =
-      StreamController<RedirectlyAppInstallResponse>.broadcast();
+  /// BehaviorSubject for app install events - automatically handles late subscribers
+  final _appInstallSubject = BehaviorSubject<RedirectlyAppInstallResponse>();
 
   /// HTTP client
   final _httpClient = http.Client();
@@ -51,6 +53,8 @@ class FlutterRedirectly {
 
   /// File name for tracking app install
   static const String _trackingFileName = '.redirectly_install_tracked';
+
+  @override
 
   /// Initialize the plugin with configuration
   Future<void> initialize(RedirectlyConfig config) async {
@@ -74,7 +78,7 @@ class FlutterRedirectly {
       }
 
       // Automatically track app install (one-time only)
-      _trackAppInstallIfNeeded();
+      await _trackAppInstallIfNeeded();
     } catch (e) {
       throw RedirectlyError.configError('Failed to initialize: $e');
     }
@@ -278,6 +282,8 @@ class FlutterRedirectly {
     return null;
   }
 
+  @override
+
   /// Create a permanent link
   Future<RedirectlyLink> createLink({
     required String slug,
@@ -316,6 +322,8 @@ class FlutterRedirectly {
       throw RedirectlyError.networkError('Network error: $e');
     }
   }
+
+  @override
 
   /// Create a temporary link
   Future<RedirectlyTempLink> createTempLink({
@@ -357,6 +365,8 @@ class FlutterRedirectly {
     }
   }
 
+  @override
+
   /// Get all permanent links
   Future<List<RedirectlyLink>> getLinks() async {
     _ensureInitialized();
@@ -389,6 +399,8 @@ class FlutterRedirectly {
     }
   }
 
+  @override
+
   /// Get a specific permanent link by slug
   Future<RedirectlyLink> getLink(String slug) async {
     _ensureInitialized();
@@ -417,6 +429,8 @@ class FlutterRedirectly {
       throw RedirectlyError.networkError('Network error: $e');
     }
   }
+
+  @override
 
   /// Get a specific temporary link by slug
   Future<RedirectlyTempLink> getTempLink(String slug) async {
@@ -448,6 +462,8 @@ class FlutterRedirectly {
     }
   }
 
+  @override
+
   /// Resolve a link by username and slug (public endpoint)
   Future<RedirectlyLinkResolution> resolveLink(
       String username, String slug) async {
@@ -475,6 +491,8 @@ class FlutterRedirectly {
       throw RedirectlyError.networkError('Network error: $e');
     }
   }
+
+  @override
 
   /// Update a permanent link
   Future<RedirectlyLink> updateLink(
@@ -514,6 +532,8 @@ class FlutterRedirectly {
     }
   }
 
+  @override
+
   /// Delete a permanent link
   Future<void> deleteLink(String slug) async {
     _ensureInitialized();
@@ -539,6 +559,8 @@ class FlutterRedirectly {
       throw RedirectlyError.networkError('Network error: $e');
     }
   }
+
+  @override
 
   /// Delete a temporary link
   Future<void> deleteTempLink(String slug) async {
@@ -567,12 +589,24 @@ class FlutterRedirectly {
     }
   }
 
+  @override
+
   /// Stream of incoming link clicks
   Stream<RedirectlyLinkClick> get onLinkClick => _linkClickController.stream;
 
+  @override
+
   /// Stream of app install events
   Stream<RedirectlyAppInstallResponse> get onAppInstalled =>
-      _appInstallController.stream;
+      _appInstallSubject.stream;
+
+  @override
+
+  /// Get the current app install response (if available)
+  RedirectlyAppInstallResponse? get currentAppInstall =>
+      _appInstallSubject.valueOrNull;
+
+  @override
 
   /// Get the initial link if app was opened via a link
   Future<RedirectlyLinkClick?> getInitialLink() async {
@@ -705,7 +739,7 @@ class FlutterRedirectly {
         final response = await _logAppInstallInternal();
 
         // Emit the app install event to the stream
-        _appInstallController.add(response);
+        _appInstallSubject.add(response);
 
         // Mark as logged regardless of success to avoid repeated attempts
         await _markAppInstallAsTracked();
@@ -860,11 +894,13 @@ class FlutterRedirectly {
     }
   }
 
+  @override
+
   /// Dispose resources
   Future<void> dispose() async {
     await _linkSubscription?.cancel();
     await _linkClickController.close();
-    await _appInstallController.close();
+    await _appInstallSubject.close();
     _httpClient.close();
     _initialized = false;
     _config = null;
