@@ -859,8 +859,9 @@ final class FlutterRedirectlyImpl implements FlutterRedirectly {
       final response = await _httpClient.post(
         Uri.parse('${_config!.effectiveBaseUrl}/api/v1/app-installs'),
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${_config!.apiKey}',
+          HttpHeaders.contentTypeHeader: 'application/json',
+          HttpHeaders.authorizationHeader: 'Bearer ${_config!.apiKey}',
+          HttpHeaders.userAgentHeader: Platform.operatingSystem,
         },
         body: jsonEncode(request.toJson()),
       );
