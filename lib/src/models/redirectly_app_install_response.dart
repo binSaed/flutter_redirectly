@@ -65,7 +65,7 @@ class RedirectlyAppInstallLink {
   final String slug;
 
   /// Target URL
-  final String target;
+  final String? target;
 
   /// Full clickable URL
   final String url;
@@ -88,7 +88,7 @@ class RedirectlyAppInstallLink {
   factory RedirectlyAppInstallLink.fromJson(Map<String, dynamic> json) {
     return RedirectlyAppInstallLink(
       slug: json['slug'] as String,
-      target: json['target'] as String,
+      target: json['target'] as String?,
       url: json['url'] as String,
       createdAt: DateTime.parse(json['created_at'] as String),
       metadata: json['metadata'] as Map<String, dynamic>?,
