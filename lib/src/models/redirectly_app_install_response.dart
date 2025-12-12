@@ -15,12 +15,16 @@ class RedirectlyAppInstallResponse {
   /// Link details if matched and available
   final RedirectlyAppInstallLink? link;
 
+  /// Metadata
+  final Map<String, String>? customParameters;
+
   const RedirectlyAppInstallResponse({
     required this.matched,
     required this.type,
     this.username,
     this.slug,
     this.link,
+    this.customParameters,
   });
 
   /// Create from JSON response
@@ -30,6 +34,7 @@ class RedirectlyAppInstallResponse {
       type: json['type'] as String,
       username: json['username'] as String?,
       slug: json['slug'] as String?,
+      customParameters: json['custom_params'] as Map<String, String>?,
       link: json['link'] != null
           ? RedirectlyAppInstallLink.fromJson(
               json['link'] as Map<String, dynamic>)
